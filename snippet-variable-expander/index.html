@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snippet Variable Expander</title>
+  <style>
+    :root {
+      /* core design system */
+      --accent:            #6d8bff;
+      --accent-hover:      #8aa1ff;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+      /* semantic tokens mapped to the dark palette */
+      --bg-app:            #0d0f12;
+      --bg-panel:          #16191f;
+      --bg-header:         #12151b;
+      --bg-header-row:     rgba(109, 139, 255, 0.14);
+      --bg-hover:          #1c212b;
+      --bg-cell-focus:     #182140;
+      --bg-summary:        #12151b;
+      --bg-btn:            #1e222a;
+      --bg-btn-hover:      #262b36;
+      --bg-warning:        #2a2410;
+
+      --border:            #2a2f3a;
+      --border-cell:       #2a2f3a;
+      --border-btn:        #3a4150;
+
+      --text-primary:      #e6e9ef;
+      --text-body:         #cfd3db;
+      --text-secondary:    #aab0bd;
+      --text-muted:        #8b919e;
+      --text-hint:         #6b7280;
+      --text-col-header:   #b9c6ff;
+
+      --color-warning:     #e3b341;
+      --color-danger:      #ff6b6b;
+      --border-danger:     #5a2530;
+      --bg-danger-hover:   #2a1015;
+
+      --color-error-text:  #ff8a8a;
+      --bg-error:          #3a1418;
+
+      --color-copied:      #45d483;
+      --border-copied:     #2a6b45;
+      --bg-copied:         #10241a;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg-app);
+      color: var(--text-primary);
+      color-scheme: dark;
+    }
+
+    .app { display: grid; grid-template-columns: 1fr 1fr; height: 100vh; }
+
+    /* ——— Shared panel chrome ——— */
+    .panel { display: flex; flex-direction: column; background: var(--bg-panel); overflow: hidden; }
+
+    .panel-header {
+      display: flex; align-items: center; gap: 6px;
+      padding: 9px 14px; background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em;
+      text-transform: uppercase; color: var(--text-muted); flex-shrink: 0;
+    }
+    .panel-title { flex: 1; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 5px 11px; font-size: 0.78rem; font-weight: 600;
+      border: 1px solid var(--border-btn); border-radius: 6px;
+      background: var(--bg-btn); color: var(--text-secondary);
+      cursor: pointer; white-space: nowrap; line-height: 1.5; font-family: inherit;
+      transition: background 0.14s, border-color 0.14s, color 0.14s;
+    }
+    .btn:hover { background: var(--bg-btn-hover); border-color: var(--accent); }
+    .btn.primary { background: var(--accent); color: #0a0c10; border-color: var(--accent); }
+    .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn.danger { color: var(--color-danger); border-color: var(--border-danger); }
+    .btn.danger:hover { background: var(--bg-danger-hover); border-color: var(--color-danger); }
+    .btn:disabled { opacity: 0.45; cursor: default; }
+
+    /* ——— Right column ——— */
+    .right-col { display: grid; grid-template-rows: 1fr 1fr; border-left: 2px solid var(--border); }
+    .template-panel { border-bottom: 2px solid var(--border); }
+
+    /* ——— Template panel ——— */
+    .template-hint {
+      font-size: 0.72rem; color: var(--text-hint); font-weight: 400;
+      text-transform: none; letter-spacing: 0;
+    }
+    #template-input {
+      flex: 1; resize: none; border: none; padding: 14px 16px;
+      font-family: var(--mono); font-size: 0.83rem; line-height: 1.65;
+      outline: none; color: var(--text-primary); background: var(--bg-panel);
+    }
+    #template-input::placeholder { color: var(--text-hint); }
+
+    /* ——— Grid panel ——— */
+    .grid-controls { display: flex; gap: 5px; }
+    #row-count {
+      font-size: 0.72rem; color: var(--text-hint); font-weight: 400;
+      text-transform: none; letter-spacing: 0; margin-left: auto;
+    }
+    #grid-wrapper { flex: 1; overflow: auto; padding: 10px; background: var(--bg-panel); }
+    #data-grid { border-collapse: collapse; }
+    #data-grid td {
+      border: 1px solid var(--border-cell); padding: 5px 9px;
+      min-width: 110px; max-width: 220px; font-size: 0.83rem;
+      color: var(--text-body); white-space: nowrap; vertical-align: middle;
+      background: var(--bg-panel); font-family: var(--mono);
+    }
+    #data-grid td[contenteditable="true"]:focus {
+      outline: 2px solid var(--accent); outline-offset: -2px; background: var(--bg-cell-focus);
+    }
+    #data-grid tr:first-child td {
+      background: var(--bg-header-row); font-weight: 600; color: var(--text-col-header);
+    }
+    #data-grid tr:not(:first-child):hover td { background: var(--bg-hover); }
+
+    /* ——— Output panel ——— */
+    #output-container { flex: 1; overflow-y: auto; padding: 14px; }
+    .empty-msg { text-align: center; color: var(--text-hint); font-size: 0.85rem; margin-top: 48px; line-height: 1.8; }
+
+    .snippet-block { margin-bottom: 14px; }
+    .snippet-block details { border: 1px solid var(--border-cell); border-radius: 8px; overflow: hidden; }
+    .snippet-block details summary {
+      display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+      background: var(--bg-summary); cursor: pointer; font-size: 0.78rem; font-weight: 600;
+      color: var(--text-muted); user-select: none; list-style: none;
+    }
+    .snippet-block details summary::-webkit-details-marker { display: none; }
+    .toggle-icon { font-size: 0.6rem; display: inline-block; transition: transform 0.12s; color: var(--text-hint); }
+    .snippet-block details[open] .toggle-icon { transform: rotate(90deg); }
+    .row-label { flex: 1; }
+
+    .copy-snippet-btn {
+      padding: 3px 9px; font-size: 0.72rem; font-weight: 600;
+      border: 1px solid var(--border-btn); border-radius: 5px;
+      background: var(--bg-btn); color: var(--text-muted);
+      cursor: pointer; line-height: 1.5; font-family: inherit; transition: all 0.14s;
+    }
+    .copy-snippet-btn:hover { background: var(--bg-btn-hover); color: var(--text-primary); border-color: var(--accent); }
+    .copy-snippet-btn.copied { color: var(--color-copied); border-color: var(--border-copied); background: var(--bg-copied); }
+
+    .snippet-content {
+      padding: 12px 16px; white-space: pre-wrap; font-family: var(--mono);
+      font-size: 0.83rem; line-height: 1.7; color: var(--text-primary); background: var(--bg-panel);
+    }
+    .snippet-empty-row {
+      padding: 9px 16px; font-size: 0.78rem; color: var(--color-warning);
+      background: var(--bg-warning); display: flex; align-items: center; gap: 6px;
+    }
+    .error {
+      color: var(--color-error-text); background: var(--bg-error);
+      border-radius: 4px; padding: 0 3px; font-weight: 600;
+    }
+    .btn-flash {
+      color: var(--color-copied) !important;
+      border-color: var(--border-copied) !important;
+      background: var(--bg-copied) !important;
+    }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-btn); border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- ——— Output panel (left) ——— -->
+    <div class="panel output-panel">
+      <div class="panel-header">
+        <span class="panel-title">Output</span>
+        <button class="btn primary" id="generate-btn">Generate</button>
+        <button class="btn" id="copy-all-btn">Copy All</button>
+      </div>
+      <div id="output-container">
+        <p class="empty-msg">Enter a template on the right,<br>fill in the data grid, then press <strong>Generate</strong>.</p>
+      </div>
+    </div>
+
+    <!-- ——— Right column ——— -->
+    <div class="right-col">
+
+      <!-- Template panel (top-right) -->
+      <div class="panel template-panel">
+        <div class="panel-header">
+          <span class="panel-title">Template</span>
+          <span class="template-hint">use {% varName %} placeholders</span>
+        </div>
+        <textarea id="template-input" placeholder="Hi {% firstName %},&#10;&#10;Your order {% orderId %} is ready for pickup.&#10;&#10;— The Team"></textarea>
+      </div>
+
+      <!-- Grid panel (bottom-right) -->
+      <div class="panel grid-panel">
+        <div class="panel-header">
+          <span class="panel-title">Data Grid</span>
+          <div class="grid-controls">
+            <button class="btn" id="add-col-btn" title="Add column">+ Col</button>
+            <button class="btn" id="add-row-btn" title="Add row">+ Row</button>
+            <button class="btn danger" id="remove-row-btn" title="Remove last row">– Row</button>
+            <button class="btn danger" id="remove-col-btn" title="Remove last column">– Col</button>
+          </div>
+          <span id="row-count"></span>
+        </div>
+        <div id="grid-wrapper">
+          <table id="data-grid"></table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Maximum data rows (not counting the header row).
+    const MAX_ROWS = 50;
+
+    // gridData[0] = headers, gridData[1..n] = data rows
+    let gridData = [
+      ['firstName', 'orderId'],
+      ['Alice', 'ORD-001'],
+      ['Bob',   'ORD-002'],
+    ];
+
+    const templateInput   = document.getElementById('template-input');
+    const outputContainer = document.getElementById('output-container');
+    const dataGrid        = document.getElementById('data-grid');
+    const generateBtn     = document.getElementById('generate-btn');
+    const copyAllBtn      = document.getElementById('copy-all-btn');
+    const addRowBtn       = document.getElementById('add-row-btn');
+    const addColBtn       = document.getElementById('add-col-btn');
+    const removeRowBtn    = document.getElementById('remove-row-btn');
+    const removeColBtn    = document.getElementById('remove-col-btn');
+    const rowCountEl      = document.getElementById('row-count');
+
+    // ——————————————————————————————————————————
+    // Clipboard (with file:// fallback)
+    // ——————————————————————————————————————————
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (_) {}
+        document.body.removeChild(ta);
+        return ok;
+      }
+    }
+
+    // ——————————————————————————————————————————
+    // Template expansion
+    // ——————————————————————————————————————————
+
+    const TOKEN_RE = /{%\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*%}/g;
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // Returns an HTML string with tokens substituted or wrapped in .error spans.
+    function expandRow(template, headers, row) {
+      TOKEN_RE.lastIndex = 0;
+      let html = '';
+      let lastIndex = 0;
+      let match;
+
+      while ((match = TOKEN_RE.exec(template)) !== null) {
+        html += escapeHtml(template.slice(lastIndex, match.index));
+
+        const varName = match[1];
+        const colIdx  = headers.findIndex(h => h.trim() === varName);
+
+        if (colIdx === -1) {
+          // Variable exists in template but not in any column header → error
+          html += `<span class="error" title="Undefined variable: ${varName}">${escapeHtml(match[0])}</span>`;
+        } else {
+          html += escapeHtml(row[colIdx] ?? '');
+        }
+
+        lastIndex = TOKEN_RE.lastIndex;
+      }
+
+      html += escapeHtml(template.slice(lastIndex));
+      return html;
+    }
+
+    // ——————————————————————————————————————————
+    // Output rendering
+    // ——————————————————————————————————————————
+
+    function renderOutput() {
+      const template = templateInput.value;
+
+      if (!template.trim()) {
+        outputContainer.innerHTML = '<p class="empty-msg">Enter a template on the right,<br>fill in the data grid, then press <strong>Generate</strong>.</p>';
+        return;
+      }
+
+      const headers  = gridData[0] || [];
+      const dataRows = gridData.slice(1);
+
+      if (dataRows.length === 0) {
+        outputContainer.innerHTML = '<p class="empty-msg">Add at least one data row to the grid.</p>';
+        return;
+      }
+
+      const html = dataRows.map((row, i) => buildSnippetBlock(template, headers, row, i)).join('');
+      outputContainer.innerHTML = html;
+
+      // Attach copy listeners in JS (no inline handlers). Old nodes were just
+      // replaced by innerHTML, so these bind to the fresh buttons only.
+      outputContainer.querySelectorAll('.copy-snippet-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();   // don't toggle the <details> summary
+          e.preventDefault();
+          const idx = btn.dataset.idx;
+          const el = document.getElementById('snippet-' + idx);
+          if (!el) return;
+          copyText(el.innerText).then(ok =>
+            flashBtn(btn, ok ? 'Copied!' : 'Failed', 'copy-snippet-btn copied'));
+        });
+      });
+    }
+
+    function buildSnippetBlock(template, headers, row, idx) {
+      const rowNum  = idx + 1;
+      const isEmpty = row.every(cell => (cell ?? '').trim() === '');
+
+      if (isEmpty) {
+        return `
+          <div class="snippet-block">
+            <details open>
+              <summary>
+                <span class="toggle-icon">&#9654;</span>
+                <span class="row-label">Row ${rowNum}</span>
+              </summary>
+              <div class="snippet-empty-row">&#9888;&#xFE0E; Empty row — nothing to expand.</div>
+            </details>
+          </div>`;
+      }
+
+      const expanded = expandRow(template, headers, row);
+      return `
+        <div class="snippet-block">
+          <details open>
+            <summary>
+              <span class="toggle-icon">&#9654;</span>
+              <span class="row-label">Row ${rowNum}</span>
+              <button class="copy-snippet-btn" data-idx="${idx}">Copy</button>
+            </summary>
+            <div class="snippet-content" id="snippet-${idx}">${expanded}</div>
+          </details>
+        </div>`;
+    }
+
+    function flashBtn(btn, label, flashClass) {
+      const origText  = btn.textContent;
+      const origClass = btn.className;
+      btn.textContent = label;
+      btn.className   = flashClass;
+      setTimeout(() => { btn.textContent = origText; btn.className = origClass; }, 1600);
+    }
+
+    generateBtn.addEventListener('click', renderOutput);
+
+    copyAllBtn.addEventListener('click', () => {
+      const snippets = outputContainer.querySelectorAll('.snippet-content');
+      if (snippets.length === 0) return;
+      const text = Array.from(snippets).map(s => s.innerText).join('\n\n---\n\n');
+      copyText(text).then(() => flashBtn(copyAllBtn, 'Copied!', 'btn btn-flash'));
+    });
+
+    // ——————————————————————————————————————————
+    // Grid rendering
+    // ——————————————————————————————————————————
+
+    function renderGrid() {
+      dataGrid.innerHTML = '';
+
+      gridData.forEach((row, r) => {
+        const tr = document.createElement('tr');
+        row.forEach((cell, c) => {
+          const td = createCell(cell, r, c);
+          tr.appendChild(td);
+        });
+        dataGrid.appendChild(tr);
+      });
+
+      updateRowCount();
+    }
+
+    function createCell(value, r, c) {
+      const td = document.createElement('td');
+      td.contentEditable = 'true';
+      td.textContent = value;
+
+      td.addEventListener('input',   ()  => { gridData[r][c] = td.textContent; });
+      td.addEventListener('paste',   (e) => handlePaste(e, r, c));
+      td.addEventListener('keydown', (e) => handleCellKeydown(e, r, c));
+
+      return td;
+    }
+
+    function focusCell(r, c) {
+      const trs = dataGrid.querySelectorAll('tr');
+      if (r < 0 || r >= trs.length) return;
+      const tds = trs[r].querySelectorAll('td');
+      if (c < 0 || c >= tds.length) return;
+      const td = tds[c];
+      td.focus();
+      // Place cursor at end of text
+      const range = document.createRange();
+      range.selectNodeContents(td);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    function handleCellKeydown(e, r, c) {
+      const numRows = gridData.length;
+      const numCols = (gridData[0] || []).length;
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (c > 0)          focusCell(r, c - 1);
+          else if (r > 0)     focusCell(r - 1, numCols - 1);
+        } else {
+          if (c < numCols - 1)    focusCell(r, c + 1);
+          else if (r < numRows - 1) focusCell(r + 1, 0);
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (r < numRows - 1) focusCell(r + 1, c);
+      } else if (e.key === 'ArrowUp'   && r > 0)          { e.preventDefault(); focusCell(r - 1, c); }
+        else if (e.key === 'ArrowDown' && r < numRows - 1) { e.preventDefault(); focusCell(r + 1, c); }
+    }
+
+    function updateRowCount() {
+      const dataRows = gridData.length - 1;
+      rowCountEl.textContent = `${dataRows} / ${MAX_ROWS} rows`;
+    }
+
+    // ——————————————————————————————————————————
+    // Paste handling (TSV from Excel, basic CSV)
+    // ——————————————————————————————————————————
+
+    function parseClipboard(text) {
+      const lines = text.split(/\r?\n/);
+      // Strip trailing blank line that Excel often appends
+      while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+      if (lines.length === 0) return [];
+
+      const isTab = lines.some(l => l.includes('\t'));
+      return isTab
+        ? lines.map(l => l.split('\t'))
+        : lines.map(l => l.split(','));
+    }
+
+    function handlePaste(e, startRow, startCol) {
+      e.preventDefault();
+      const text = e.clipboardData.getData('text/plain');
+      const pastedRows = parseClipboard(text);
+      if (pastedRows.length === 0) return;
+
+      // Clamp: header row is index 0; data rows are indices 1..MAX_ROWS
+      const maxGridRows = MAX_ROWS + 1;
+      const endRow      = Math.min(startRow + pastedRows.length, maxGridRows);
+      const maxPasteCol = Math.max(...pastedRows.map(r => r.length));
+      const endCol      = startCol + maxPasteCol;
+
+      // Expand rows
+      while (gridData.length < endRow) {
+        gridData.push(new Array((gridData[0] || []).length).fill(''));
+      }
+
+      // Expand columns
+      const currentCols = (gridData[0] || []).length;
+      if (endCol > currentCols) {
+        const newCols = endCol - currentCols;
+        gridData = gridData.map(row => row.concat(new Array(newCols).fill('')));
+      }
+
+      // Write pasted values
+      for (let r = 0; r < pastedRows.length && startRow + r < endRow; r++) {
+        for (let c = 0; c < pastedRows[r].length; c++) {
+          gridData[startRow + r][startCol + c] = pastedRows[r][c];
+        }
+      }
+
+      renderGrid();
+      focusCell(startRow, startCol);
+    }
+
+    // ——————————————————————————————————————————
+    // Grid toolbar controls
+    // ——————————————————————————————————————————
+
+    addRowBtn.addEventListener('click', () => {
+      if (gridData.length - 1 >= MAX_ROWS) {
+        flashBtn(addRowBtn, `Max ${MAX_ROWS}`, 'btn danger');
+        return;
+      }
+      gridData.push(new Array((gridData[0] || []).length).fill(''));
+      renderGrid();
+      focusCell(gridData.length - 1, 0);
+    });
+
+    addColBtn.addEventListener('click', () => {
+      gridData = gridData.map(row => row.concat(''));
+      renderGrid();
+      focusCell(0, (gridData[0] || []).length - 1);
+    });
+
+    removeRowBtn.addEventListener('click', () => {
+      if (gridData.length <= 1) return;    // Nothing to remove below the header
+      gridData.pop();
+      renderGrid();
+    });
+
+    removeColBtn.addEventListener('click', () => {
+      if ((gridData[0] || []).length <= 1) return;   // Keep at least one column
+      gridData = gridData.map(row => row.slice(0, -1));
+      renderGrid();
+    });
+
+    // ——————————————————————————————————————————
+    // Boot
+    // ——————————————————————————————————————————
+
+    renderGrid();
+  </script>
+</body>
+</html>

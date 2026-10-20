@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WireGuard Config Generator</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2330;
+    --border: #2d3340;
+    --text: #e6edf3;
+    --muted: #8b97a6;
+    --accent: #38c172;
+    --accent-2: #2da866;
+    --accent-dim: #1f6f47;
+    --danger: #e5534b;
+    --input-bg: #0b0f14;
+    --code-bg: #0b0f14;
+    --shadow: 0 8px 28px rgba(0,0,0,0.45);
+    --radius: 10px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 80% -10%, #14202b 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 28px 20px 8px;
+    text-align: center;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1.7rem;
+    letter-spacing: -0.02em;
+  }
+  header h1 .wg { color: var(--accent); }
+  header p {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+  .offline-badge {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 0.72rem;
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    background: rgba(56,193,114,0.08);
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 16px 20px 60px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 18px 20px;
+    box-shadow: var(--shadow);
+  }
+  .card h2 {
+    margin: 0 0 14px;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card h2 .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin: 12px 0 5px;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  input[type="text"], input[type="number"], select, textarea {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    padding: 9px 11px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(56,193,114,0.15);
+  }
+  input::placeholder { color: #4a5563; }
+
+  .row {
+    display: flex;
+    gap: 12px;
+  }
+  .row > div { flex: 1; }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 14px;
+  }
+  .checkbox-row input { width: auto; }
+  .checkbox-row label {
+    margin: 0;
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  .hint {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  button {
+    font-family: var(--sans);
+    font-size: 0.86rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 16px;
+    cursor: pointer;
+    transition: background .15s, transform .05s, opacity .15s;
+  }
+  button:active { transform: translateY(1px); }
+  .btn-primary {
+    background: var(--accent);
+    color: #04210f;
+  }
+  .btn-primary:hover { background: var(--accent-2); }
+  .btn-secondary {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent); }
+  .btn-small {
+    padding: 6px 10px;
+    font-size: 0.74rem;
+  }
+
+  .generate-bar {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 22px 0 10px;
+    flex-wrap: wrap;
+  }
+  .generate-bar button { padding: 13px 26px; font-size: 0.95rem; }
+
+  .keygen-line {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .keygen-line input { flex: 1; }
+
+  .client-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .client-row input { flex: 1; }
+  .client-row .ip-badge {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--muted);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 9px;
+    white-space: nowrap;
+  }
+  .client-row .remove-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 7px 11px;
+    line-height: 1;
+    font-size: 1rem;
+  }
+  .client-row .remove-btn:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  .client-row .remove-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  /* Output */
+  #output { margin-top: 26px; display: none; }
+  #output.show { display: block; }
+
+  .output-block {
+    margin-bottom: 20px;
+  }
+  .output-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .output-head h3 {
+    margin: 0;
+    font-size: 0.98rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tag {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .tag.server { color: #6cb6ff; border-color: #234; }
+  .tag.client { color: var(--accent); border-color: var(--accent-dim); }
+
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 0;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: #cdd9e5;
+    white-space: pre;
+  }
+  pre .section { color: #d2a8ff; }
+  pre .key { color: #6cb6ff; }
+  pre .comment { color: #6a7480; font-style: italic; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--accent);
+    color: #04210f;
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 10px 20px;
+    border-radius: 999px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    z-index: 50;
+    box-shadow: var(--shadow);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    border: none;
+    margin: 8px 0 0;
+  }
+
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.76rem;
+    padding: 10px 20px 40px;
+  }
+  footer code {
+    font-family: var(--mono);
+    color: var(--text);
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="wg">WireGuard</span> Config Generator</h1>
+  <p>Generate matched server &amp; client configurations entirely in your browser.</p>
+  <span class="offline-badge">● 100% offline — no server, no network requests, keys never leave this page</span>
+</header>
+
+<main>
+  <div class="grid">
+    <!-- SERVER -->
+    <section class="card">
+      <h2><span class="dot"></span>Server</h2>
+
+      <label for="srvEndpoint">Public endpoint (host or IP that clients connect to)</label>
+      <input type="text" id="srvEndpoint" placeholder="vpn.example.com" value="">
+      <div class="hint">The reachable public address of your server. Used in client configs.</div>
+
+      <div class="row">
+        <div>
+          <label for="srvPort">Listen port</label>
+          <input type="number" id="srvPort" value="51820" min="1" max="65535">
+        </div>
+        <div>
+          <label for="srvAddress">Tunnel address / CIDR</label>
+          <input type="text" id="srvAddress" value="10.8.0.1/24">
+        </div>
+      </div>
+      <div class="hint">The server's address inside the VPN subnet. Clients are assigned from this range.</div>
+
+      <div class="row">
+        <div>
+          <label for="srvDns">DNS for clients</label>
+          <input type="text" id="srvDns" value="1.1.1.1">
+        </div>
+        <div>
+          <label for="srvMtu">MTU (optional)</label>
+          <input type="text" id="srvMtu" placeholder="auto" value="">
+        </div>
+      </div>
+
+      <label>Server keypair</label>
+      <div class="keygen-line">
+        <input type="text" id="srvPriv" placeholder="server private key" readonly>
+        <button class="btn-secondary btn-small" id="srvRegen">Regenerate</button>
+      </div>
+      <div class="keygen-line" style="margin-top:8px;">
+        <input type="text" id="srvPub" placeholder="server public key" readonly>
+      </div>
+      <div class="hint">Private key stays in the server config only. Public key is shared with clients.</div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="srvNat" checked>
+        <label for="srvNat">Include NAT/forwarding rules (PostUp / PostDown)</label>
+      </div>
+      <div class="row" id="natRow">
+        <div>
+          <label for="srvNic">Server WAN interface (for NAT)</label>
+          <input type="text" id="srvNic" value="eth0">
+        </div>
+      </div>
+    </section>
+
+    <!-- CLIENTS -->
+    <section class="card">
+      <h2><span class="dot"></span>Clients</h2>
+
+      <label for="clientStartIp">First client IP</label>
+      <input type="text" id="clientStartIp" value="10.8.0.2">
+      <div class="hint">Each client gets a sequential IP from here, inside the tunnel subnet.</div>
+
+      <label>Clients</label>
+      <div id="clientList"></div>
+      <button class="btn-secondary btn-small" id="addClientBtn" style="margin-top:8px;">+ Add client</button>
+      <div class="hint">Names are used in config comments and download filenames.</div>
+
+      <label for="clientAllowed">Allowed IPs (traffic routed through the tunnel)</label>
+      <input type="text" id="clientAllowed" value="0.0.0.0/0, ::/0">
+      <div class="hint"><code>0.0.0.0/0, ::/0</code> = full tunnel. Use the server subnet (e.g. <code>10.8.0.0/24</code>) for split tunnel.</div>
+
+      <div class="row">
+        <div>
+          <label for="clientKeepalive">Persistent keepalive (s)</label>
+          <input type="text" id="clientKeepalive" value="25">
+        </div>
+        <div>
+          <label for="clientDns">Client DNS (blank = use server DNS)</label>
+          <input type="text" id="clientDns" placeholder="inherit from server" value="">
+        </div>
+      </div>
+      <div class="hint">Keepalive of 25s keeps NAT mappings alive. Set to 0 to disable.</div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="usePsk" checked>
+        <label for="usePsk">Use preshared keys (extra symmetric layer, recommended)</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="clientPubEndpoint">
+        <label for="clientPubEndpoint">Assume server is also a peer behind NAT (adds keepalive to server peer entry)</label>
+      </div>
+    </section>
+  </div>
+
+  <div class="generate-bar">
+    <button class="btn-primary" id="generateBtn">Generate Configurations</button>
+    <button class="btn-secondary" id="downloadAllBtn" style="display:none;">Download all (.zip-less bundle)</button>
+  </div>
+
+  <section id="output"></section>
+</main>
+
+<footer>
+  Keys are generated locally with an in-page X25519 (Curve25519) implementation.
+  Save this file and open it offline — it needs no network. &nbsp;·&nbsp;
+  Apply a config with <code>wg-quick up &lt;file&gt;.conf</code>
+</footer>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+/* =========================================================================
+   X25519 / Curve25519 — RFC 7748 implementation (BigInt, no dependencies)
+   Used to derive WireGuard public keys from private keys, fully offline.
+   ========================================================================= */
+const P25519 = (1n << 255n) - 19n;
+const A24 = 121665n;
+
+const fmod = (n) => ((n % P25519) + P25519) % P25519;
+
+// Modular exponentiation (used for inversion via Fermat's little theorem)
+function fpow(base, exp) {
+  base = fmod(base);
+  let result = 1n;
+  while (exp > 0n) {
+    if (exp & 1n) result = fmod(result * base);
+    base = fmod(base * base);
+    exp >>= 1n;
+  }
+  return result;
+}
+const finv = (n) => fpow(n, P25519 - 2n);
+
+function decodeLittleEndian(bytes) {
+  let r = 0n;
+  for (let i = 0; i < 32; i++) r |= BigInt(bytes[i]) << BigInt(8 * i);
+  return r;
+}
+function encodeLittleEndian(n) {
+  const out = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) { out[i] = Number(n & 0xffn); n >>= 8n; }
+  return out;
+}
+function decodeScalar(bytes) {
+  const e = bytes.slice(0, 32);
+  e[0] &= 248; e[31] &= 127; e[31] |= 64;   // clamp
+  return decodeLittleEndian(e);
+}
+function decodeUCoordinate(bytes) {
+  const u = bytes.slice(0, 32);
+  u[31] &= 127;                              // mask high bit
+  return fmod(decodeLittleEndian(u));
+}
+
+// The Montgomery ladder scalar multiplication.
+function x25519(scalarBytes, uBytes) {
+  const k = decodeScalar(scalarBytes);
+  const x1 = decodeUCoordinate(uBytes);
+  let x2 = 1n, z2 = 0n, x3 = x1, z3 = 1n, swap = 0n;
+
+  for (let t = 254; t >= 0; t--) {
+    const kt = (k >> BigInt(t)) & 1n;
+    swap ^= kt;
+    if (swap) { [x2, x3] = [x3, x2]; [z2, z3] = [z3, z2]; }
+    swap = kt;
+
+    const A = fmod(x2 + z2),  AA = fmod(A * A);
+    const B = fmod(x2 - z2),  BB = fmod(B * B);
+    const E = fmod(AA - BB);
+    const C = fmod(x3 + z3),  D = fmod(x3 - z3);
+    const DA = fmod(D * A),   CB = fmod(C * B);
+    x3 = fmod((DA + CB) ** 2n % P25519);
+    z3 = fmod(x1 * fmod((DA - CB) ** 2n % P25519));
+    x2 = fmod(AA * BB);
+    z2 = fmod(E * fmod(AA + fmod(A24 * E)));
+  }
+  if (swap) { [x2, x3] = [x3, x2]; [z2, z3] = [z3, z2]; }
+  return encodeLittleEndian(fmod(x2 * finv(z2)));
+}
+
+const BASEPOINT = (() => { const b = new Uint8Array(32); b[0] = 9; return b; })();
+
+/* ---- base64 helpers for 32-byte keys ---- */
+function bytesToBase64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+/* ---- WireGuard key generation ---- */
+function randomBytes(n) {
+  const b = new Uint8Array(n);
+  crypto.getRandomValues(b);
+  return b;
+}
+function generateKeypair() {
+  const priv = randomBytes(32);
+  priv[0] &= 248; priv[31] &= 127; priv[31] |= 64;   // store clamped (matches `wg genkey`)
+  const pub = x25519(priv, BASEPOINT);
+  return { privateKey: bytesToBase64(priv), publicKey: bytesToBase64(pub) };
+}
+function generatePresharedKey() {
+  return bytesToBase64(randomBytes(32));
+}
+
+/* =========================================================================
+   UI / config building
+   ========================================================================= */
+const $ = (id) => document.getElementById(id);
+
+let serverKeys = generateKeypair();
+function renderServerKeys() {
+  $('srvPriv').value = serverKeys.privateKey;
+  $('srvPub').value = serverKeys.publicKey;
+}
+renderServerKeys();
+$('srvRegen').addEventListener('click', () => {
+  serverKeys = generateKeypair();
+  renderServerKeys();
+  toast('Server keypair regenerated');
+});
+
+$('srvNat').addEventListener('change', (e) => {
+  $('natRow').style.display = e.target.checked ? 'flex' : 'none';
+});
+
+// Split an "addr/cidr" string into { ip, cidr }
+function splitCidr(s, fallbackCidr) {
+  const m = s.trim().match(/^([0-9.]+)(?:\/(\d+))?$/);
+  if (!m) return null;
+  return { ip: m[1], cidr: m[2] !== undefined ? m[2] : fallbackCidr };
+}
+// Increment the final octet of an IPv4 address
+function incrementIp(ip, by) {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(p => isNaN(p))) return null;
+  let val = ((parts[0] << 24) >>> 0) + (parts[1] << 16) + (parts[2] << 8) + parts[3] + by;
+  return [(val >>> 24) & 255, (val >>> 16) & 255, (val >>> 8) & 255, val & 255].join('.');
+}
+
+// Turn a display name into a safe filename token (falls back to a default)
+function sanitizeName(name, fallback) {
+  const s = name.trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  return s || fallback;
+}
+
+/* ---- dynamic client list ---- */
+const MAX_CLIENTS = 50;
+
+function refreshClientIps() {
+  const startIp = $('clientStartIp').value.trim() || '10.8.0.2';
+  const rows = [...document.querySelectorAll('.client-row')];
+  rows.forEach((row, i) => {
+    const ip = incrementIp(startIp, i);
+    row.querySelector('.ip-badge').textContent = ip || 'invalid IP';
+  });
+  // Disable remove buttons when only one client remains
+  const removeBtns = document.querySelectorAll('.client-row .remove-btn');
+  removeBtns.forEach((b) => { b.disabled = rows.length <= 1; });
+  $('addClientBtn').disabled = rows.length >= MAX_CLIENTS;
+}
+
+function addClientRow(name) {
+  const list = $('clientList');
+  if (list.children.length >= MAX_CLIENTS) return;
+  const idx = list.children.length + 1;
+  const row = document.createElement('div');
+  row.className = 'client-row';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'client-name';
+  input.placeholder = 'client name';
+  input.value = name !== undefined ? name : `client-${idx}`;
+
+  const badge = document.createElement('span');
+  badge.className = 'ip-badge';
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'remove-btn';
+  remove.textContent = '×';
+  remove.title = 'Remove client';
+  remove.addEventListener('click', () => { row.remove(); refreshClientIps(); });
+
+  row.appendChild(input);
+  row.appendChild(badge);
+  row.appendChild(remove);
+  list.appendChild(row);
+  refreshClientIps();
+}
+
+$('addClientBtn').addEventListener('click', () => addClientRow());
+$('clientStartIp').addEventListener('input', refreshClientIps);
+addClientRow();   // start with one client
+
+function buildConfigs() {
+  const endpoint = $('srvEndpoint').value.trim() || '<SERVER_PUBLIC_IP>';
+  const port = $('srvPort').value.trim() || '51820';
+  const srvAddrRaw = $('srvAddress').value.trim() || '10.8.0.1/24';
+  const srvAddr = splitCidr(srvAddrRaw, '24');
+  const dns = $('srvDns').value.trim();
+  const mtu = $('srvMtu').value.trim();
+  const nat = $('srvNat').checked;
+  const nic = $('srvNic').value.trim() || 'eth0';
+
+  const startIp = $('clientStartIp').value.trim() || '10.8.0.2';
+  const allowed = $('clientAllowed').value.trim() || '0.0.0.0/0, ::/0';
+  const keepalive = $('clientKeepalive').value.trim();
+  const clientDns = $('clientDns').value.trim() || dns;
+  const usePsk = $('usePsk').checked;
+  const serverBehindNat = $('clientPubEndpoint').checked;
+
+  if (!srvAddr) { toast('Invalid server tunnel address'); return null; }
+  const subnetCidr = srvAddr.cidr || '24';
+
+  // Generate client keypairs + PSKs, one per named row
+  const rows = [...document.querySelectorAll('.client-row')];
+  const clients = [];
+  const usedNames = new Set();
+  rows.forEach((row, i) => {
+    const ip = incrementIp(startIp, i);
+    if (!ip) return;
+    let name = sanitizeName(row.querySelector('.client-name').value, `client-${i + 1}`);
+    // Keep download filenames unique if two clients share a name
+    let unique = name, n = 2;
+    while (usedNames.has(unique)) unique = `${name}-${n++}`;
+    usedNames.add(unique);
+    clients.push({
+      index: i + 1,
+      name: unique,
+      ip: ip,
+      keys: generateKeypair(),
+      psk: usePsk ? generatePresharedKey() : null,
+    });
+  });
+  if (!clients.length) { toast('Add at least one client (check the first client IP)'); return null; }
+
+  /* ---- Server config ---- */
+  let srv = '[Interface]\n';
+  srv += `# Server\n`;
+  srv += `Address = ${srvAddr.ip}/${subnetCidr}\n`;
+  srv += `ListenPort = ${port}\n`;
+  srv += `PrivateKey = ${serverKeys.privateKey}\n`;
+  if (mtu) srv += `MTU = ${mtu}\n`;
+  if (nat) {
+    srv += `PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o ${nic} -j MASQUERADE\n`;
+    srv += `PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o ${nic} -j MASQUERADE\n`;
+  }
+  for (const c of clients) {
+    srv += `\n[Peer]\n`;
+    srv += `# ${c.name}\n`;
+    srv += `PublicKey = ${c.keys.publicKey}\n`;
+    if (c.psk) srv += `PresharedKey = ${c.psk}\n`;
+    srv += `AllowedIPs = ${c.ip}/32\n`;
+  }
+
+  /* ---- Client configs ---- */
+  const clientConfigs = clients.map((c) => {
+    let cfg = '[Interface]\n';
+    cfg += `# ${c.name}\n`;
+    cfg += `Address = ${c.ip}/${subnetCidr}\n`;
+    cfg += `PrivateKey = ${c.keys.privateKey}\n`;
+    if (clientDns) cfg += `DNS = ${clientDns}\n`;
+    if (mtu) cfg += `MTU = ${mtu}\n`;
+    cfg += `\n[Peer]\n`;
+    cfg += `# server\n`;
+    cfg += `PublicKey = ${serverKeys.publicKey}\n`;
+    if (c.psk) cfg += `PresharedKey = ${c.psk}\n`;
+    cfg += `Endpoint = ${endpoint}:${port}\n`;
+    cfg += `AllowedIPs = ${allowed}\n`;
+    if (keepalive && keepalive !== '0') cfg += `PersistentKeepalive = ${keepalive}\n`;
+    else if (serverBehindNat) cfg += `PersistentKeepalive = 25\n`;
+    return { index: c.index, name: c.name, text: cfg };
+  });
+
+  return {
+    server: { name: 'wg0-server', text: srv },
+    clients: clientConfigs,
+  };
+}
+
+/* ---- rendering output ---- */
+function highlight(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^(\[[^\]]+\])$/gm, '<span class="section">$1</span>')
+    .replace(/^(#.*)$/gm, '<span class="comment">$1</span>')
+    .replace(/^([A-Za-z]+)(\s*=)/gm, '<span class="key">$1</span>$2');
+}
+
+function makeBlock(title, tagClass, tagText, cfgText, fileName) {
+  const block = document.createElement('div');
+  block.className = 'output-block';
+
+  const head = document.createElement('div');
+  head.className = 'output-head';
+  const h3 = document.createElement('h3');
+  h3.innerHTML = `${title} <span class="tag ${tagClass}">${tagText}</span>`;
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'btn-secondary btn-small';
+  copyBtn.textContent = 'Copy';
+  copyBtn.addEventListener('click', () => copyText(cfgText));
+
+  const dlBtn = document.createElement('button');
+  dlBtn.className = 'btn-secondary btn-small';
+  dlBtn.textContent = 'Download .conf';
+  dlBtn.addEventListener('click', () => downloadFile(fileName, cfgText));
+
+  actions.appendChild(copyBtn);
+  actions.appendChild(dlBtn);
+
+  if (tagClass === 'client') {
+    const qrBtn = document.createElement('button');
+    qrBtn.className = 'btn-secondary btn-small';
+    qrBtn.textContent = 'Copy for QR generator';
+    qrBtn.title = 'Paste this into any QR code generator, then scan it with the WireGuard mobile app';
+    qrBtn.addEventListener('click', () => copyText(cfgText, 'Config copied — paste into a QR generator'));
+    actions.appendChild(qrBtn);
+  }
+
+  head.appendChild(h3);
+  head.appendChild(actions);
+
+  const pre = document.createElement('pre');
+  pre.innerHTML = highlight(cfgText);
+
+  block.appendChild(head);
+  block.appendChild(pre);
+  return block;
+}
+
+let lastResult = null;
+
+$('generateBtn').addEventListener('click', () => {
+  const result = buildConfigs();
+  if (!result) return;
+  lastResult = result;
+
+  const out = $('output');
+  out.innerHTML = '';
+
+  out.appendChild(makeBlock('Server configuration', 'server', 'server', result.server.text, result.server.name + '.conf'));
+  const hr = document.createElement('hr'); hr.className = 'divider'; hr.style.margin = '4px 0 22px';
+  out.appendChild(hr);
+
+  for (const c of result.clients) {
+    out.appendChild(makeBlock(c.name + ' configuration', 'client', 'client', c.text, c.name + '.conf'));
+  }
+
+  out.classList.add('show');
+  $('downloadAllBtn').style.display = 'inline-block';
+  out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  toast('Configurations generated');
+});
+
+// "Download all" — concatenate every config into one annotated text file
+$('downloadAllBtn').addEventListener('click', () => {
+  if (!lastResult) return;
+  let bundle = '';
+  const sep = '\n' + '#'.repeat(60) + '\n';
+  bundle += `# FILE: ${lastResult.server.name}.conf` + '\n' + lastResult.server.text;
+  for (const c of lastResult.clients) {
+    bundle += sep + `# FILE: ${c.name}.conf` + '\n' + c.text;
+  }
+  downloadFile('wireguard-configs.txt', bundle);
+});
+
+/* ---- utilities ---- */
+function downloadFile(name, text) {
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function copyText(text, msg) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // Fallback for file:// where clipboard API may be blocked
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    document.body.removeChild(ta);
+  }
+  toast(msg || 'Copied!');
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1900);
+}
+</script>
+</body>
+</html>

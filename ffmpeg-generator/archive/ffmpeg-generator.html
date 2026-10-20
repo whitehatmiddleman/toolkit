@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ffmpeg generator</title>
+<style>
+  :root{
+    --bg:#0c0e11; --panel:#15181d; --panel-2:#1b1f26; --border:#272d36;
+    --text:#e6e9ee; --muted:#8b94a3; --faint:#5b6473;
+    --accent:#4ec9b0; --accent-dim:#2f6f62;
+    --flag:#7aa2f7; --file:#e0a458; --value:#c8cdd6; --bin:#4ec9b0;
+    --ok:#7bd88f; --radius:10px;
+    --mono:ui-monospace,"SF Mono","Cascadia Code","Geist Mono",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--sans);
+    font-size:14px; line-height:1.5; padding:28px 18px 64px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:760px; margin:0 auto}
+  header{margin-bottom:22px}
+  h1{
+    font-family:var(--mono); font-size:20px; font-weight:600; margin:0;
+    letter-spacing:-.3px;
+  }
+  h1 .dim{color:var(--accent)}
+  .sub{color:var(--muted); font-size:13px; margin-top:4px}
+
+  .card{
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius); padding:16px; margin-bottom:14px;
+  }
+  .row{display:flex; gap:12px; flex-wrap:wrap}
+  .row > .field{flex:1; min-width:160px}
+  label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px; font-family:var(--mono)}
+  .hint{font-size:11.5px; color:var(--faint); margin-top:5px; line-height:1.45}
+  input[type=text], select{
+    width:100%; background:var(--panel-2); border:1px solid var(--border);
+    color:var(--text); border-radius:7px; padding:8px 10px;
+    font-family:var(--mono); font-size:13px;
+  }
+  input[type=text]:focus, select:focus{outline:2px solid var(--accent-dim); outline-offset:1px; border-color:var(--accent-dim)}
+  select{cursor:pointer; appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:calc(100% - 16px) 14px,calc(100% - 11px) 14px;
+    background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:30px}
+
+  /* tabs */
+  .tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px}
+  .tab{
+    font-family:var(--mono); font-size:13px; color:var(--muted);
+    background:var(--panel); border:1px solid var(--border); border-radius:7px;
+    padding:8px 14px; cursor:pointer;
+  }
+  .tab:hover{color:var(--text)}
+  .tab[aria-selected=true]{
+    color:var(--bg); background:var(--accent); border-color:var(--accent); font-weight:600;
+  }
+
+  /* presets */
+  .presets{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px}
+  .preset{
+    flex:1; min-width:150px; text-align:left; cursor:pointer;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:8px;
+    padding:11px 12px; color:var(--text);
+  }
+  .preset:hover{border-color:var(--accent-dim)}
+  .preset .pt{font-family:var(--mono); font-size:13px; font-weight:600}
+  .preset .pd{font-size:11.5px; color:var(--muted); margin-top:3px}
+
+  .panel{display:none}
+  .panel.active{display:block}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media(max-width:520px){.grid{grid-template-columns:1fr}}
+  .check{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:13px; color:var(--text); cursor:pointer; user-select:none}
+  .check input{accent-color:var(--accent); width:15px; height:15px}
+
+  .sectlabel{font-family:var(--mono); font-size:11px; color:var(--faint); text-transform:uppercase; letter-spacing:.08em; margin:4px 0 10px}
+
+  /* output */
+  .out{position:sticky; bottom:0; margin-top:18px}
+  .outhead{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px}
+  .outhead span{font-family:var(--mono); font-size:11px; color:var(--faint); text-transform:uppercase; letter-spacing:.08em}
+  .copy{
+    font-family:var(--mono); font-size:12px; cursor:pointer;
+    background:var(--accent); color:var(--bg); border:none; border-radius:7px;
+    padding:7px 14px; font-weight:600;
+  }
+  .copy:hover{filter:brightness(1.08)}
+  .copy.done{background:var(--ok)}
+  pre.cmd{
+    margin:0; background:#080a0c; border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.7;
+    white-space:pre-wrap; word-break:break-all;
+  }
+  pre.cmd .prompt{color:var(--accent-dim); user-select:none}
+  .t-bin{color:var(--bin); font-weight:600}
+  .t-flag{color:var(--flag)}
+  .t-file{color:var(--file)}
+  .t-value{color:var(--value)}
+  .note{font-size:11.5px; color:var(--faint); margin-top:8px; line-height:1.5}
+  .note b{color:var(--muted); font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ffmpeg <span class="dim">generator</span></h1>
+    <p class="sub">Build a command, copy it, run it. Nothing leaves this page.</p>
+  </header>
+
+  <div class="card">
+    <div class="row">
+      <div class="field">
+        <label for="inFile">Input file</label>
+        <input type="text" id="inFile" value="input.mp4">
+      </div>
+      <div class="field">
+        <label for="outFile">Output file</label>
+        <input type="text" id="outFile" value="output.mp4">
+      </div>
+    </div>
+    <label class="check" style="margin-top:12px">
+      <input type="checkbox" id="overwrite"> Overwrite output if it exists <span style="color:var(--faint)">(-y)</span>
+    </label>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="video" aria-selected="true">Video</button>
+    <button class="tab" role="tab" data-tab="audio" aria-selected="false">Audio</button>
+    <button class="tab" role="tab" data-tab="gif" aria-selected="false">GIF</button>
+    <button class="tab" role="tab" data-tab="trim" aria-selected="false">Trim</button>
+  </div>
+
+  <!-- VIDEO -->
+  <div class="panel active" id="p-video">
+    <div class="presets">
+      <button class="preset" data-vp="compat">
+        <div class="pt">Max compatibility</div>
+        <div class="pd">H.264 + AAC MP4. Plays nearly everywhere.</div>
+      </button>
+      <button class="preset" data-vp="small">
+        <div class="pt">Smallest file</div>
+        <div class="pd">H.265 / HEVC. ~40% smaller, newer devices.</div>
+      </button>
+      <button class="preset" data-vp="balanced">
+        <div class="pt">Balanced</div>
+        <div class="pd">H.264 quality/size middle ground.</div>
+      </button>
+    </div>
+    <div class="card">
+      <div class="sectlabel">Settings</div>
+      <div class="grid">
+        <div class="field">
+          <label for="vCodec">Codec</label>
+          <select id="vCodec">
+            <option value="libx264">H.264 (libx264)</option>
+            <option value="libx265">H.265 / HEVC (libx265)</option>
+            <option value="libvpx-vp9">VP9 (webm)</option>
+          </select>
+          <div class="hint">H.264 = max compatibility. H.265/VP9 = smaller files, less universal playback.</div>
+        </div>
+        <div class="field">
+          <label for="vCrf">Quality — CRF</label>
+          <select id="vCrf"></select>
+          <div class="hint">Lower = better quality &amp; bigger file. 23 is a good default; 18 looks near-lossless.</div>
+        </div>
+        <div class="field">
+          <label for="vPreset">Encode speed</label>
+          <select id="vPreset">
+            <option>ultrafast</option><option>veryfast</option><option>faster</option>
+            <option selected>medium</option><option>slow</option><option>veryslow</option>
+          </select>
+          <div class="hint">Slower = smaller file at the same quality, but takes longer. No effect on how it looks.</div>
+        </div>
+        <div class="field">
+          <label for="vScale">Downscale to</label>
+          <select id="vScale">
+            <option value="">Keep original</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="360">360p</option>
+          </select>
+          <div class="hint">Caps the height; width auto-adjusts (kept even). Smaller resolution = much smaller file.</div>
+        </div>
+        <div class="field">
+          <label for="vFps">Frame rate</label>
+          <select id="vFps">
+            <option value="">Keep original</option>
+            <option value="60">60</option><option value="30">30</option>
+            <option value="24">24</option><option value="15">15</option>
+          </select>
+          <div class="hint">Lowering fps shrinks the file. 24–30 is fine for most footage.</div>
+        </div>
+        <div class="field">
+          <label for="vABitrate">Audio bitrate</label>
+          <select id="vABitrate">
+            <option value="192k">192k</option><option value="128k" selected>128k</option>
+            <option value="96k">96k</option><option value="64k">64k</option>
+          </select>
+          <div class="hint">Audio quality. 128k is transparent for most content.</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:18px; flex-wrap:wrap; margin-top:14px">
+        <label class="check"><input type="checkbox" id="vDropAudio"> Drop audio (-an)</label>
+        <label class="check"><input type="checkbox" id="vFaststart" checked> Web fast-start</label>
+        <label class="check"><input type="checkbox" id="vCompat" checked> Compatibility pixel format</label>
+      </div>
+      <div class="hint" style="margin-top:8px"><b style="color:var(--muted)">Web fast-start</b> moves the index to the front so the video can stream before fully downloading. <b style="color:var(--muted)">Compatibility pixel format</b> (yuv420p) ensures playback on phones &amp; browsers.</div>
+    </div>
+  </div>
+
+  <!-- AUDIO -->
+  <div class="panel" id="p-audio">
+    <div class="card">
+      <div class="sectlabel">Extract / convert audio</div>
+      <div class="grid">
+        <div class="field">
+          <label for="aFormat">Format</label>
+          <select id="aFormat">
+            <option value="mp3">MP3 (universal)</option>
+            <option value="m4a">M4A / AAC</option>
+            <option value="opus">Opus (efficient)</option>
+            <option value="wav">WAV (lossless, large)</option>
+            <option value="flac">FLAC (lossless, compressed)</option>
+          </select>
+          <div class="hint">MP3 plays everywhere. Opus is smallest at equal quality. WAV/FLAC are lossless.</div>
+        </div>
+        <div class="field" id="aBitrateField">
+          <label for="aBitrate">Bitrate</label>
+          <select id="aBitrate">
+            <option value="320k">320k</option><option value="256k">256k</option>
+            <option value="192k" selected>192k</option><option value="128k">128k</option><option value="96k">96k</option>
+          </select>
+          <div class="hint">Higher = better quality, bigger file. 192k is a safe default for music.</div>
+        </div>
+      </div>
+      <div class="note">Strips video with <b>-vn</b> and re-encodes audio to your chosen format.</div>
+    </div>
+  </div>
+
+  <!-- GIF -->
+  <div class="panel" id="p-gif">
+    <div class="card">
+      <div class="sectlabel">Animated GIF</div>
+      <div class="grid">
+        <div class="field">
+          <label for="gFps">Frame rate</label>
+          <select id="gFps">
+            <option value="10">10</option><option value="15" selected>15</option>
+            <option value="20">20</option><option value="24">24</option>
+          </select>
+          <div class="hint">GIFs get large fast — 10–15 fps keeps size reasonable.</div>
+        </div>
+        <div class="field">
+          <label for="gWidth">Width (px)</label>
+          <select id="gWidth">
+            <option value="320">320</option><option value="480" selected>480</option>
+            <option value="640">640</option><option value="800">800</option>
+          </select>
+          <div class="hint">Height scales automatically to keep aspect ratio.</div>
+        </div>
+      </div>
+      <div class="note">Uses a generated <b>color palette</b> (palettegen / paletteuse) in one pass for clean, high-quality output instead of a muddy default GIF.</div>
+    </div>
+  </div>
+
+  <!-- TRIM -->
+  <div class="panel" id="p-trim">
+    <div class="card">
+      <div class="sectlabel">Trim / clip</div>
+      <div class="grid">
+        <div class="field">
+          <label for="tStart">Start (HH:MM:SS)</label>
+          <input type="text" id="tStart" value="00:00:05">
+        </div>
+        <div class="field">
+          <label for="tEnd">End (HH:MM:SS)</label>
+          <input type="text" id="tEnd" value="00:00:20">
+        </div>
+        <div class="field">
+          <label for="tMode">Mode</label>
+          <select id="tMode">
+            <option value="copy">Copy (fast, no re-encode)</option>
+            <option value="reencode">Re-encode (frame-accurate)</option>
+          </select>
+          <div class="hint"><b style="color:var(--muted)">Copy</b> is instant but cuts at the nearest keyframe, so the start may be slightly off. <b style="color:var(--muted)">Re-encode</b> is exact but slower.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="out">
+    <div class="outhead">
+      <span>Command</span>
+      <button class="copy" id="copyBtn">Copy</button>
+    </div>
+    <pre class="cmd" id="cmd"><span class="prompt">$ </span></pre>
+    <div class="note" id="cmdNote"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  // ---- helpers ----
+  var $ = function(id){ return document.getElementById(id); };
+  function q(s){ return '"' + String(s).trim() + '"'; }   // quote a filename
+
+  // CRF options
+  (function(){
+    var sel = $("vCrf"), html = "";
+    for(var c=14;c<=34;c++){ html += '<option value="'+c+'"'+(c===23?' selected':'')+'>'+c+'</option>'; }
+    sel.innerHTML = html;
+  })();
+
+  var state = { tab:"video" };
+
+  // ---- command builders: each returns { args:[...], note:"" } ----
+  function buildVideo(){
+    var inF=$("inFile").value, outF=$("outFile").value;
+    var codec=$("vCodec").value;
+    var args=["ffmpeg"];
+    if($("overwrite").checked) args.push("-y");
+    args.push("-i", q(inF));
+
+    // video filters
+    var vf=[];
+    if($("vScale").value) vf.push("scale=-2:"+$("vScale").value);
+    if(vf.length) args.push("-vf", vf.join(","));
+    if($("vFps").value) args.push("-r", $("vFps").value);
+
+    args.push("-c:v", codec);
+    args.push("-crf", $("vCrf").value);
+    args.push("-preset", $("vPreset").value);
+    if(codec==="libx265") args.push("-tag:v","hvc1");
+    if(codec==="libvpx-vp9") args.push("-b:v","0");
+    if(codec!=="libvpx-vp9" && $("vCompat").checked) args.push("-pix_fmt","yuv420p");
+
+    // audio
+    if($("vDropAudio").checked){
+      args.push("-an");
+    } else {
+      args.push("-c:a", codec==="libvpx-vp9" ? "libopus" : "aac");
+      args.push("-b:a", $("vABitrate").value);
+    }
+    if($("vFaststart").checked && codec!=="libvpx-vp9") args.push("-movflags","+faststart");
+
+    args.push(q(outF));
+    var note = codec==="libvpx-vp9"
+      ? "VP9 outputs a .webm file — make sure your output name ends in .webm."
+      : "";
+    return { args:args, note:note };
+  }
+
+  function buildAudio(){
+    var inF=$("inFile").value, outF=$("outFile").value;
+    var fmt=$("aFormat").value;
+    var encMap={ mp3:"libmp3lame", m4a:"aac", opus:"libopus", wav:"pcm_s16le", flac:"flac" };
+    var lossless = (fmt==="wav"||fmt==="flac");
+    var args=["ffmpeg"];
+    if($("overwrite").checked) args.push("-y");
+    args.push("-i", q(inF), "-vn", "-c:a", encMap[fmt]);
+    if(!lossless) args.push("-b:a", $("aBitrate").value);
+    args.push(q(outF));
+    return { args:args, note:"Output should end in ."+fmt+" to match the chosen format." };
+  }
+
+  function buildGif(){
+    var inF=$("inFile").value, outF=$("outFile").value;
+    var fps=$("gFps").value, w=$("gWidth").value;
+    var filter="fps="+fps+",scale="+w+":-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse";
+    var args=["ffmpeg"];
+    if($("overwrite").checked) args.push("-y");
+    args.push("-i", q(inF), "-vf", filter, "-loop", "0", q(outF));
+    return { args:args, note:"Output should end in .gif" };
+  }
+
+  function buildTrim(){
+    var inF=$("inFile").value, outF=$("outFile").value;
+    var start=$("tStart").value.trim(), end=$("tEnd").value.trim();
+    var mode=$("tMode").value;
+    var args=["ffmpeg"];
+    if($("overwrite").checked) args.push("-y");
+    var note;
+    if(mode==="copy"){
+      // seek before input for speed; stream copy
+      args.push("-ss", start, "-to", end, "-i", q(inF), "-c", "copy", q(outF));
+      note="Start may snap to the nearest keyframe. Switch to Re-encode for an exact cut.";
+    } else {
+      // seek after input for accuracy
+      args.push("-i", q(inF), "-ss", start, "-to", end,
+                "-c:v","libx264","-crf","18","-preset","veryfast","-c:a","aac", q(outF));
+      note="Frame-accurate cut. Times are HH:MM:SS (or seconds).";
+    }
+    return { args:args, note:note };
+  }
+
+  var builders={ video:buildVideo, audio:buildAudio, gif:buildGif, trim:buildTrim };
+
+  // ---- render ----
+  function classify(tok){
+    if(tok==="ffmpeg") return "t-bin";
+    if(tok.charAt(0)==="-") return "t-flag";
+    if(tok.charAt(0)==='"') return "t-file";
+    return "t-value";
+  }
+  function escapeHtml(s){
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  var currentCmd="";
+  function render(){
+    var res = builders[state.tab]();
+    currentCmd = res.args.join(" ");
+    var html='<span class="prompt">$ </span>';
+    for(var i=0;i<res.args.length;i++){
+      html += '<span class="'+classify(res.args[i])+'">'+escapeHtml(res.args[i])+'</span>';
+      if(i<res.args.length-1) html+=" ";
+    }
+    $("cmd").innerHTML=html;
+    $("cmdNote").textContent=res.note||"";
+  }
+
+  // audio: hide bitrate for lossless
+  function syncAudioUI(){
+    var lossless = ($("aFormat").value==="wav"||$("aFormat").value==="flac");
+    $("aBitrateField").style.display = lossless ? "none" : "";
+  }
+
+  // video presets -> populate controls (single source of truth)
+  function applyVideoPreset(p){
+    var v={ codec:"libx264", crf:"23", preset:"medium", compat:true, faststart:true, abitrate:"128k" };
+    if(p==="compat"){ v.codec="libx264"; v.crf="23"; }
+    if(p==="small"){ v.codec="libx265"; v.crf="28"; v.abitrate="96k"; }
+    if(p==="balanced"){ v.codec="libx264"; v.crf="23"; v.preset="medium"; }
+    $("vCodec").value=v.codec; $("vCrf").value=v.crf; $("vPreset").value=v.preset;
+    $("vABitrate").value=v.abitrate; $("vCompat").checked=v.compat; $("vFaststart").checked=v.faststart;
+    render();
+  }
+
+  // ---- copy (file:// safe) ----
+  function copyCmd(){
+    var btn=$("copyBtn");
+    function done(){ btn.textContent="Copied"; btn.classList.add("done");
+      setTimeout(function(){ btn.textContent="Copy"; btn.classList.remove("done"); },1400); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(currentCmd).then(done, fallback);
+    } else { fallback(); }
+    function fallback(){
+      var ta=document.createElement("textarea");
+      ta.value=currentCmd; ta.style.position="fixed"; ta.style.opacity="0";
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand("copy"); done(); }catch(e){}
+      document.body.removeChild(ta);
+    }
+  }
+
+  // ---- wiring ----
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(t){
+    t.addEventListener("click", function(){
+      state.tab=t.getAttribute("data-tab");
+      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(x){
+        x.setAttribute("aria-selected", x===t ? "true":"false"); });
+      Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(p){ p.classList.remove("active"); });
+      $("p-"+state.tab).classList.add("active");
+      render();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-vp]"), function(b){
+    b.addEventListener("click", function(){ applyVideoPreset(b.getAttribute("data-vp")); });
+  });
+  // any input change re-renders
+  document.addEventListener("input", function(e){
+    if(e.target.id==="aFormat") syncAudioUI();
+    render();
+  });
+  document.addEventListener("change", render);
+  $("copyBtn").addEventListener("click", copyCmd);
+
+  syncAudioUI();
+  render();
+})();
+</script>
+</body>
+</html>

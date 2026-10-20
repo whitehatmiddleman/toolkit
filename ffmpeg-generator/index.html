@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ffmpeg generator</title>
+<style>
+  :root{
+    --bg:#0d0f12; --panel:#16191f; --panel-2:#1e222a; --border:#2a2f3a; --border2:#3a4150;
+    --text:#e6e9ef; --muted:#8b919e; --faint:#5b6473;
+    --accent:#4ec9b0; --accent-dim:#2f6f62; --accent-soft:rgba(78,201,176,0.14);
+    --flag:#7aa2f7; --file:#e0a56b; --value:#c8cdd6; --bin:#4ec9b0; --filter:#c792ea; --shell:#6b7687;
+    --ok:#45d483; --radius:12px;
+    --code-bg:#0a0c10;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 600px at 50% -10%, #181c24 0%, var(--bg) 60%); color:var(--text); font-family:var(--sans); font-size:14px; line-height:1.5; padding:36px 18px 80px; min-height:100vh; -webkit-font-smoothing:antialiased}
+  .wrap{max-width:780px; margin:0 auto}
+  header{margin-bottom:22px}
+  .pill{display:inline-block; background:var(--accent-soft); color:var(--accent); font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; padding:4px 10px; border-radius:999px; margin-bottom:12px; font-family:var(--sans)}
+  h1{font-family:var(--sans); font-size:1.7rem; font-weight:700; margin:0; letter-spacing:-0.03em}
+  h1 .dim{color:var(--accent)}
+  .sub{color:var(--muted); font-size:0.9rem; margin-top:6px}
+
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:14px; box-shadow:0 12px 30px rgba(0,0,0,0.28)}
+  .row{display:flex; gap:12px; flex-wrap:wrap}
+  .row > .field{flex:1; min-width:160px}
+  label{display:block; font-size:0.75rem; color:var(--muted); margin-bottom:6px; font-family:var(--mono)}
+  .hint{font-size:0.72rem; color:var(--faint); margin-top:6px; line-height:1.45}
+  input[type=text], select, textarea{width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:9px 11px; font-family:var(--mono); font-size:0.82rem; transition:border-color 0.14s, box-shadow 0.14s}
+  input[type=text]:focus, select:focus, textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+  textarea{line-height:1.7; resize:vertical; min-height:122px}
+  select{cursor:pointer; appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:calc(100% - 16px) 15px,calc(100% - 11px) 15px; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:30px}
+
+  .modes{display:flex; gap:6px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:5px; margin-bottom:16px}
+  .mode{flex:1; text-align:center; font-family:var(--mono); font-size:0.85rem; color:var(--muted); background:transparent; border:none; border-radius:7px; padding:10px; cursor:pointer; font-weight:500}
+  .mode[aria-selected=true]{background:var(--accent); color:var(--bg); font-weight:600}
+  .mode[aria-selected=false]:hover{color:var(--text)}
+  .modepanel{display:none}
+  .modepanel.active{display:block}
+
+  .tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px}
+  .tab{font-family:var(--mono); font-size:0.82rem; color:var(--muted); background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 15px; cursor:pointer}
+  .tab:hover{color:var(--text)}
+  .tab[aria-selected=true]{color:var(--bg); background:var(--accent); border-color:var(--accent); font-weight:600}
+
+  .presets{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px}
+  .preset{flex:1; min-width:150px; text-align:left; cursor:pointer; background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:12px 13px; color:var(--text)}
+  .preset:hover{border-color:var(--accent)}
+  .preset .pt{font-family:var(--mono); font-size:0.82rem; font-weight:600}
+  .preset .pd{font-size:0.72rem; color:var(--muted); margin-top:3px}
+
+  .panel{display:none}
+  .panel.active{display:block}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media(max-width:520px){.grid{grid-template-columns:1fr}}
+  .check{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:0.82rem; color:var(--text); cursor:pointer; user-select:none}
+  .check input{accent-color:var(--accent); width:16px; height:16px}
+  .sectlabel{font-family:var(--mono); font-size:0.68rem; color:var(--faint); text-transform:uppercase; letter-spacing:.08em; margin:4px 0 12px}
+
+  .out{position:sticky; bottom:0; margin-top:18px}
+  .outhead{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:12px; flex-wrap:wrap}
+  .outhead > span{font-family:var(--mono); font-size:0.68rem; color:var(--faint); text-transform:uppercase; letter-spacing:.08em}
+  .outctl{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+  .outctl select{width:auto; padding:6px 28px 6px 10px; font-size:0.75rem; background-position:calc(100% - 12px) 13px,calc(100% - 7px) 13px}
+  .copy{font-family:var(--mono); font-size:0.75rem; cursor:pointer; background:var(--accent); color:var(--bg); border:none; border-radius:8px; padding:8px 15px; font-weight:600}
+  .copy:hover{filter:brightness(1.08)}
+  .copy.done{background:var(--ok)}
+  pre.cmd{margin:0; background:var(--code-bg); border:1px solid var(--border); border-radius:var(--radius); padding:15px 17px; overflow-x:auto; font-family:var(--mono); font-size:0.82rem; line-height:1.7; white-space:pre-wrap; word-break:break-all}
+  pre.cmd .prompt{color:var(--accent-dim); user-select:none}
+  .t-bin{color:var(--bin); font-weight:600}
+  .t-flag{color:var(--flag)}
+  .t-file{color:var(--file)}
+  .t-value{color:var(--value)}
+  .t-filter{color:var(--filter)}
+  .t-shell{color:var(--shell)}
+  .note{font-size:0.72rem; color:var(--faint); margin-top:8px; line-height:1.5}
+  .note b{color:var(--muted); font-weight:600}
+  .help h3{font-family:var(--mono); font-size:0.9rem; margin:0 0 8px; color:var(--text)}
+  .help p{margin:0 0 9px; color:var(--muted); font-size:0.82rem; line-height:1.55}
+  .help p:last-child{margin-bottom:0}
+  .help code{font-family:var(--mono); font-size:0.75rem; background:var(--panel-2); border:1px solid var(--border); border-radius:5px; padding:1px 6px; color:var(--file)}
+  .help .cmdline{display:block; font-family:var(--mono); font-size:0.75rem; background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:10px 13px; margin:4px 0 11px; color:var(--value); white-space:pre-wrap; word-break:break-all}
+  .help b{color:var(--text); font-weight:600}
+
+  ::-webkit-scrollbar{width:8px; height:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border2); border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="pill">Command Builder</span>
+    <h1>ffmpeg <span class="dim">generator</span></h1>
+    <p class="sub">Build a command, copy it, run it. Nothing leaves this page.</p>
+  </header>
+
+  <div class="modes" role="tablist">
+    <button class="mode" role="tab" data-mode="generator" aria-selected="true">Generator</button>
+    <button class="mode" role="tab" data-mode="concat" aria-selected="false">Concat</button>
+    <button class="mode" role="tab" data-mode="help" aria-selected="false">Help</button>
+  </div>
+
+  <!-- ============ GENERATOR ============ -->
+  <div class="modepanel active" id="mode-generator">
+    <div class="card">
+      <label class="check" style="margin-bottom:12px"><input type="checkbox" id="batchOn"> Batch a whole folder</label>
+      <div id="ioNormal">
+        <div class="row">
+          <div class="field">
+            <label for="inFile">Input file</label>
+            <input type="text" id="inFile" value="input.mp4">
+          </div>
+          <div class="field" id="outField">
+            <label for="outFile">Output file</label>
+            <input type="text" id="outFile" value="output.mp4">
+            <div class="hint">Extension auto-suggested from your settings; edit the name freely.</div>
+          </div>
+        </div>
+      </div>
+      <div id="ioBatch" style="display:none">
+        <div class="row">
+          <div class="field">
+            <label for="batchPat">Files to match</label>
+            <input type="text" id="batchPat" value="*.mp4">
+            <div class="hint">Glob run in the current folder, e.g. <span style="color:var(--file)">*.mp4</span> or <span style="color:var(--file)">*.mov</span>.</div>
+          </div>
+          <div class="field" id="batchSuffixField">
+            <label for="batchSuffix">Output suffix</label>
+            <input type="text" id="batchSuffix" value="_out">
+            <div class="hint">Appended to each input's name, e.g. <span style="color:var(--file)">clip_out.mp4</span>.</div>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:8px">Each matching file is processed with the settings below. Loop syntax follows the <b style="color:var(--muted)">Shell</b> chosen by the command box.</div>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="video" aria-selected="true">Video</button>
+      <button class="tab" role="tab" data-tab="audio" aria-selected="false">Audio</button>
+      <button class="tab" role="tab" data-tab="gif" aria-selected="false">GIF</button>
+      <button class="tab" role="tab" data-tab="trim" aria-selected="false">Trim</button>
+      <button class="tab" role="tab" data-tab="frames" aria-selected="false">Frames</button>
+      <button class="tab" role="tab" data-tab="inspect" aria-selected="false">Inspect</button>
+    </div>
+
+    <!-- VIDEO -->
+    <div class="panel active" id="p-video">
+      <div class="presets">
+        <button class="preset" data-vp="compat"><div class="pt">Max compatibility</div><div class="pd">H.264 + AAC MP4. Plays nearly everywhere.</div></button>
+        <button class="preset" data-vp="small"><div class="pt">Smallest file</div><div class="pd">H.265 / HEVC. ~40% smaller, newer devices.</div></button>
+        <button class="preset" data-vp="balanced"><div class="pt">Balanced</div><div class="pd">H.264 quality/size middle ground.</div></button>
+      </div>
+      <div class="card">
+        <div class="sectlabel">Settings</div>
+        <div class="grid">
+          <div class="field">
+            <label for="vAccel">Encoder / acceleration</label>
+            <select id="vAccel">
+              <option value="cpu">CPU — software (libx264/5)</option>
+              <option value="nvenc">NVIDIA GPU — NVENC</option>
+              <option value="amf">AMD GPU — AMF</option>
+            </select>
+            <div class="hint">GPU encoding is much faster but needs a supported card + driver. Unsure? Check the Help tab.</div>
+          </div>
+          <div class="field">
+            <label for="vCodec">Codec</label>
+            <select id="vCodec">
+              <option value="libx264">H.264 (libx264)</option>
+              <option value="libx265">H.265 / HEVC (libx265)</option>
+              <option value="libvpx-vp9">VP9 (webm)</option>
+            </select>
+            <div class="hint">H.264 = max compatibility. H.265/VP9 = smaller files, less universal playback. VP9 is CPU-only.</div>
+          </div>
+          <div class="field">
+            <label for="vCrf" id="vCrfLabel">Quality — CRF</label>
+            <select id="vCrf"></select>
+            <div class="hint">Lower = better quality &amp; bigger file. 23 is a good default; 18 looks near-lossless.</div>
+          </div>
+          <div class="field">
+            <label for="vPreset">Encode speed</label>
+            <select id="vPreset"></select>
+            <div class="hint">Slower = smaller file at the same quality, but takes longer. No effect on how it looks.</div>
+          </div>
+          <div class="field">
+            <label for="vScale">Downscale to</label>
+            <select id="vScale">
+              <option value="">Keep original</option>
+              <option value="1080">1080p</option><option value="720">720p</option>
+              <option value="480">480p</option><option value="360">360p</option>
+            </select>
+            <div class="hint">Caps the height; width auto-adjusts (kept even). Smaller resolution = much smaller file.</div>
+          </div>
+          <div class="field">
+            <label for="vFps">Frame rate</label>
+            <select id="vFps">
+              <option value="">Keep original</option>
+              <option value="60">60</option><option value="30">30</option>
+              <option value="24">24</option><option value="15">15</option>
+            </select>
+            <div class="hint">Lowering fps shrinks the file. 24–30 is fine for most footage.</div>
+          </div>
+          <div class="field">
+            <label for="vABitrate">Audio bitrate</label>
+            <select id="vABitrate">
+              <option value="192k">192k</option><option value="128k" selected>128k</option>
+              <option value="96k">96k</option><option value="64k">64k</option>
+            </select>
+            <div class="hint">Audio quality. 128k is transparent for most content.</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:18px; flex-wrap:wrap; margin-top:14px">
+          <label class="check"><input type="checkbox" id="vDropAudio"> Drop audio (-an)</label>
+          <label class="check"><input type="checkbox" id="vFaststart" checked> Web fast-start</label>
+          <label class="check"><input type="checkbox" id="vCompat" checked> Compatibility pixel format</label>
+        </div>
+        <div class="hint" style="margin-top:8px"><b style="color:var(--muted)">Web fast-start</b> moves the index to the front so the video can stream before fully downloading. <b style="color:var(--muted)">Compatibility pixel format</b> (yuv420p) ensures playback on phones &amp; browsers.</div>
+      </div>
+    </div>
+
+    <!-- AUDIO -->
+    <div class="panel" id="p-audio">
+      <div class="card">
+        <div class="sectlabel">Extract / convert audio</div>
+        <div class="grid">
+          <div class="field">
+            <label for="aFormat">Format</label>
+            <select id="aFormat">
+              <option value="mp3">MP3 (universal)</option>
+              <option value="m4a">M4A / AAC</option>
+              <option value="opus">Opus (efficient)</option>
+              <option value="wav">WAV (lossless, large)</option>
+              <option value="flac">FLAC (lossless, compressed)</option>
+            </select>
+            <div class="hint">MP3 plays everywhere. Opus is smallest at equal quality. WAV/FLAC are lossless.</div>
+          </div>
+          <div class="field" id="aBitrateField">
+            <label for="aBitrate">Bitrate</label>
+            <select id="aBitrate">
+              <option value="320k">320k</option><option value="256k">256k</option>
+              <option value="192k" selected>192k</option><option value="128k">128k</option><option value="96k">96k</option>
+            </select>
+            <div class="hint">Higher = better quality, bigger file. 192k is a safe default for music.</div>
+          </div>
+        </div>
+        <div class="note">Strips video with <b>-vn</b> and re-encodes audio to your chosen format.</div>
+      </div>
+    </div>
+
+    <!-- GIF -->
+    <div class="panel" id="p-gif">
+      <div class="card">
+        <div class="sectlabel">Animated GIF</div>
+        <div class="grid">
+          <div class="field">
+            <label for="gFps">Frame rate</label>
+            <select id="gFps">
+              <option value="10">10</option><option value="15" selected>15</option>
+              <option value="20">20</option><option value="24">24</option>
+            </select>
+            <div class="hint">GIFs get large fast — 10–15 fps keeps size reasonable.</div>
+          </div>
+          <div class="field">
+            <label for="gWidth">Width (px)</label>
+            <select id="gWidth">
+              <option value="320">320</option><option value="480" selected>480</option>
+              <option value="640">640</option><option value="800">800</option>
+            </select>
+            <div class="hint">Height scales automatically to keep aspect ratio.</div>
+          </div>
+        </div>
+        <div class="note">Uses a generated <b>color palette</b> (palettegen / paletteuse) in one pass for clean, high-quality output instead of a muddy default GIF.</div>
+      </div>
+    </div>
+
+    <!-- TRIM -->
+    <div class="panel" id="p-trim">
+      <div class="card">
+        <div class="sectlabel">Trim / clip</div>
+        <div class="grid">
+          <div class="field"><label for="tStart">Start (HH:MM:SS)</label><input type="text" id="tStart" value="00:00:05"></div>
+          <div class="field"><label for="tEnd">End (HH:MM:SS)</label><input type="text" id="tEnd" value="00:00:20"></div>
+          <div class="field">
+            <label for="tMode">Mode</label>
+            <select id="tMode">
+              <option value="copy">Copy (fast, no re-encode)</option>
+              <option value="reencode">Re-encode (frame-accurate)</option>
+            </select>
+            <div class="hint"><b style="color:var(--muted)">Copy</b> is instant but cuts at the nearest keyframe. <b style="color:var(--muted)">Re-encode</b> is exact but slower.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FRAMES -->
+    <div class="panel" id="p-frames">
+      <div class="card">
+        <div class="sectlabel">Extract frames</div>
+        <div class="grid">
+          <div class="field">
+            <label for="fMode">What to extract</label>
+            <select id="fMode">
+              <option value="single">Single frame (poster)</option>
+              <option value="thumbs">Thumbnails (every N seconds)</option>
+              <option value="contact">Contact sheet (grid)</option>
+            </select>
+            <div class="hint">A poster image, a numbered sequence of stills, or one tiled overview image.</div>
+          </div>
+          <div class="field" id="fTimeField">
+            <label for="fTime">Timestamp (HH:MM:SS)</label>
+            <input type="text" id="fTime" value="00:00:05">
+            <div class="hint">Where to grab the single frame.</div>
+          </div>
+          <div class="field" id="fIntervalField" style="display:none">
+            <label for="fInterval">One frame every (seconds)</label>
+            <select id="fInterval">
+              <option value="1">1</option><option value="2">2</option><option value="5">5</option>
+              <option value="10" selected>10</option><option value="30">30</option><option value="60">60</option>
+            </select>
+            <div class="hint">Sampling interval along the timeline.</div>
+          </div>
+          <div class="field" id="fColsField" style="display:none">
+            <label for="fCols">Grid columns</label>
+            <select id="fCols"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+            <div class="hint">Tiles per row.</div>
+          </div>
+          <div class="field" id="fRowsField" style="display:none">
+            <label for="fRows">Grid rows</label>
+            <select id="fRows"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
+            <div class="hint">Number of rows. Columns×rows = total tiles.</div>
+          </div>
+          <div class="field" id="fWidthField" style="display:none">
+            <label for="fWidth">Thumb width (px)</label>
+            <select id="fWidth"><option value="">Original</option><option value="160">160</option><option value="240" selected>240</option><option value="320">320</option></select>
+            <div class="hint">Width of each still; height keeps aspect.</div>
+          </div>
+          <div class="field">
+            <label for="fFmt">Image format</label>
+            <select id="fFmt"><option value="jpg" selected>JPG (small)</option><option value="png">PNG (lossless)</option></select>
+            <div class="hint">JPG for previews, PNG for crisp detail.</div>
+          </div>
+        </div>
+        <div class="note">Single output is named <b>frame</b>, sequences are <b>thumb_0001…</b>, grids are <b>contact</b> (prefixed per file in batch mode).</div>
+      </div>
+    </div>
+
+    <!-- INSPECT -->
+    <div class="panel" id="p-inspect">
+      <div class="card">
+        <div class="sectlabel">Inspect a file (ffprobe)</div>
+        <div class="field">
+          <label for="iMode">Detail level</label>
+          <select id="iMode">
+            <option value="quick">Quick — codec, size, duration, bitrate</option>
+            <option value="summary">Summary — human-readable overview</option>
+            <option value="json">Full — all streams + format as JSON</option>
+          </select>
+          <div class="hint">Run this first to see a clip's resolution, codecs, duration — and whether it even has an audio track (useful before concat).</div>
+        </div>
+        <div class="note">Read-only: <b>ffprobe</b> only reports on the file, it never changes or writes anything.</div>
+      </div>
+    </div>
+  </div><!-- /mode-generator -->
+
+  <!-- ============ CONCAT ============ -->
+  <div class="modepanel" id="mode-concat">
+    <div class="card">
+      <div class="sectlabel">Input videos — one per line, in play order</div>
+      <textarea id="cInputs" spellcheck="false">clip1.mp4
+clip2.mp4
+clip3.mp4</textarea>
+      <div class="hint">Joined top-to-bottom. Clips are re-encoded so sources of different sizes, frame rates, or audio settings line up correctly.</div>
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="cMix"> Some clips have no audio track</label>
+      <div class="hint" id="cMixHint" style="display:none">Add <b style="color:var(--muted)">[silent]</b> after a filename that has no audio — e.g. <span style="color:var(--file)">b-roll.mp4 [silent]</span>. Silence is inserted for it so audio stays in sync. This reads each silent clip's length via ffprobe, so the command becomes shell-specific (see the <b style="color:var(--muted)">Shell</b> selector by the command box).</div>
+    </div>
+    <div class="card">
+      <div class="sectlabel">Output</div>
+      <div class="grid">
+        <div class="field">
+          <label for="cRes">Resolution</label>
+          <select id="cRes">
+            <option value="1920x1080" selected>1920×1080 (1080p)</option>
+            <option value="1280x720">1280×720 (720p)</option>
+            <option value="854x480">854×480 (480p)</option>
+            <option value="640x360">640×360 (360p)</option>
+          </select>
+          <div class="hint">Every clip is fit to this size; mismatched ones are letterboxed, never stretched.</div>
+        </div>
+        <div class="field">
+          <label for="cFps">Frame rate</label>
+          <select id="cFps"><option value="30" selected>30</option><option value="24">24</option><option value="60">60</option></select>
+          <div class="hint">All clips are normalized to one frame rate so the join is seamless.</div>
+        </div>
+        <div class="field">
+          <label for="cCrf">Quality — CRF</label>
+          <select id="cCrf"></select>
+          <div class="hint">Lower = better quality &amp; bigger file. 23 is a good default.</div>
+        </div>
+        <div class="field">
+          <label for="cABitrate">Audio bitrate</label>
+          <select id="cABitrate"><option value="256k">256k</option><option value="192k" selected>192k</option><option value="128k">128k</option></select>
+          <div class="hint">Original audio is kept and re-encoded at this bitrate.</div>
+        </div>
+        <div class="field">
+          <label for="cAccel">Encoder / acceleration</label>
+          <select id="cAccel">
+            <option value="cpu">CPU — software (libx264)</option>
+            <option value="nvenc">NVIDIA GPU — NVENC</option>
+            <option value="amf">AMD GPU — AMF</option>
+          </select>
+          <div class="hint">H.264 output. GPU is faster but needs a supported card + driver (see Help).</div>
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label for="cOut">Output file</label>
+        <input type="text" id="cOut" value="merged.mp4">
+      </div>
+      <div class="note">Uses the <b>concat filter</b> (not stream copy) so differing sources can be standardized. Audio is kept and resampled to <b>48 kHz stereo</b>. If some clips have no audio, tick the box above so silence is inserted and the streams stay aligned.</div>
+    </div>
+  </div><!-- /mode-concat -->
+
+  <!-- ============ HELP ============ -->
+  <div class="modepanel help" id="mode-help">
+    <div class="card">
+      <h3>Do I have a usable GPU?</h3>
+      <p>First confirm the machine has a discrete GPU, then that ffmpeg can see its encoder. Listing the hardware:</p>
+      <p><b>Windows</b> — open <code>dxdiag</code>, or run in PowerShell:</p>
+      <span class="cmdline">Get-CimInstance Win32_VideoController | Select-Object Name</span>
+      <p><b>Linux</b>:</p>
+      <span class="cmdline">lspci | grep -Ei 'vga|3d|display'</span>
+      <p>Macs accelerate through VideoToolbox, which this generator's GPU options (NVENC / AMF) don't target — use CPU there.</p>
+    </div>
+    <div class="card">
+      <h3>NVIDIA (NVENC)</h3>
+      <p>Needs an NVIDIA GPU plus a current driver. Check the driver and that the card is visible:</p>
+      <span class="cmdline">nvidia-smi</span>
+      <p>A table with your GPU and a driver version means the driver is fine. Then confirm ffmpeg has the encoder:</p>
+      <span class="cmdline">ffmpeg -encoders | grep nvenc</span>
+      <p>You should see <code>h264_nvenc</code> and <code>hevc_nvenc</code>. Final end-to-end test:</p>
+      <span class="cmdline">ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30:duration=3 -c:v h264_nvenc out.mp4</span>
+      <p>Success means you're ready. <code>Cannot load libcuda</code> or <code>Cannot init CUDA</code> means the driver is missing or too old.</p>
+    </div>
+    <div class="card">
+      <h3>AMD (AMF)</h3>
+      <p>AMF is effectively <b>Windows-only</b> and needs the AMD Adrenalin driver. Confirm the encoder exists:</p>
+      <span class="cmdline">ffmpeg -encoders | findstr amf</span>
+      <p>Look for <code>h264_amf</code> and <code>hevc_amf</code>, then test:</p>
+      <span class="cmdline">ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30:duration=3 -c:v h264_amf out.mp4</span>
+      <p>On <b>Linux</b>, AMD cards usually accelerate through VAAPI instead (check <code>vainfo</code>). VAAPI uses a different command shape this generator doesn't produce — on Linux AMD, CPU is the reliable choice here.</p>
+    </div>
+    <div class="card">
+      <h3>Shells &amp; batch mode</h3>
+      <p>The <b>Shell</b> selector by the command box only changes output where shells actually differ: the <b>batch-folder</b> loop and the silent-clip duration probe. Plain single commands are identical across bash, PowerShell, and cmd.</p>
+      <p>For <b>cmd</b>, the batch loop is shown in interactive form (single <code>%</code>). Inside a <code>.bat</code> file, double them: <code>%f</code> becomes <code>%%f</code>.</p>
+      <p>List the acceleration backends your build supports with <code>ffmpeg -hwaccels</code>. If hardware encoding fails, switch the encoder to CPU — always works, just slower.</p>
+    </div>
+  </div><!-- /mode-help -->
+
+  <!-- ============ OUTPUT ============ -->
+  <div class="out">
+    <div class="outhead">
+      <span>Command</span>
+      <div class="outctl">
+        <select id="shell" title="Affects batch loops and the silent-clip probe">
+          <option value="bash" selected>bash</option>
+          <option value="pwsh">PowerShell</option>
+          <option value="cmd">cmd</option>
+        </select>
+        <label class="check" style="font-size:12px" title="Overwrite the output file without the ffmpeg confirmation prompt"><input type="checkbox" id="overwrite"> Overwrite (-y)</label>
+        <button class="copy" id="copyBtn">Copy</button>
+      </div>
+    </div>
+    <pre class="cmd" id="cmd"><span class="prompt">$ </span></pre>
+    <div class="note" id="cmdNote"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  function q(s){ return '"' + String(s).trim() + '"'; }                       // double-quote (bash/pwsh/cmd all accept)
+  function sq(s){ return "'" + String(s).trim().replace(/'/g,"''") + "'"; }    // single-quote (PowerShell literal)
+  function stripExt(n){ var i=n.lastIndexOf('.'); return (i>0)? n.slice(0,i) : n; }
+  function fileExt(n){ var i=n.lastIndexOf('.'); return (i>0)? n.slice(i+1).toLowerCase() : ''; }
+
+  function fillCrf(sel){ var h=""; for(var c=14;c<=34;c++){ h+='<option value="'+c+'"'+(c===23?' selected':'')+'>'+c+'</option>'; } sel.innerHTML=h; }
+  fillCrf($("vCrf")); fillCrf($("cCrf"));
+
+  var state = { mode:"generator", tab:"video" };
+
+  /* ---------------- shell + batch context ---------------- */
+  function curShell(){ return $("shell").value; }
+  function isBatch(){ return state.mode==="generator" && $("batchOn").checked; }
+  function batchPattern(){ return ($("batchPat").value||"*.mp4").trim(); }
+  function batchSuffix(){ var v=$("batchSuffix").value; return v==null?"_out":v; }
+  function batchBase(){ var s=curShell(); return s==="pwsh" ? '$($_.BaseName)' : (s==="cmd" ? '%~nf' : '${f%.*}'); }
+  function globExt(){ return fileExt(batchPattern())||"mp4"; }
+
+  // input token: real file (quoted) or the loop variable per shell
+  function inTok(){
+    if(!isBatch()) return q($("inFile").value);
+    var s=curShell();
+    return s==="pwsh" ? '$_.Name' : (s==="cmd" ? '"%f"' : '"$f"');
+  }
+  // output token for ext-driven operations
+  function outTok(ext){
+    if(!isBatch()) return q($("outFile").value);
+    return '"'+batchBase()+batchSuffix()+'.'+ext+'"';
+  }
+
+  /* ---------------- encoder / acceleration ---------------- */
+  var PRESETS = {
+    cpu:{ def:"medium", opts:[["ultrafast","ultrafast"],["veryfast","veryfast"],["faster","faster"],["medium","medium"],["slow","slow"],["veryslow","veryslow"]] },
+    nvenc:{ def:"p4", opts:[["p1","p1 (fastest)"],["p2","p2"],["p3","p3"],["p4","p4 (balanced)"],["p5","p5"],["p6","p6"],["p7","p7 (best)"]] },
+    amf:{ def:"balanced", opts:[["speed","speed (fastest)"],["balanced","balanced"],["quality","quality (best)"]] }
+  };
+  function rebuildPresets(accel){
+    var cfg=PRESETS[accel]||PRESETS.cpu, h="";
+    for(var i=0;i<cfg.opts.length;i++){ var o=cfg.opts[i]; h+='<option value="'+o[0]+'"'+(o[0]===cfg.def?' selected':'')+'>'+o[1]+'</option>'; }
+    $("vPreset").innerHTML=h;
+  }
+  function vEncName(codec, accel){
+    if(accel==="nvenc") return codec==="libx265" ? "hevc_nvenc" : "h264_nvenc";
+    if(accel==="amf")   return codec==="libx265" ? "hevc_amf"   : "h264_amf";
+    return codec;
+  }
+  function encoderArgs(codec, accel, quality, speed){
+    var enc=vEncName(codec, accel), a=["-c:v", enc];
+    if(accel==="nvenc"){ a.push("-rc","vbr","-cq",quality,"-b:v","0","-preset",speed); }
+    else if(accel==="amf"){ a.push("-rc","cqp","-qp_i",quality,"-qp_p",quality); if(enc==="h264_amf") a.push("-qp_b",quality); a.push("-quality",speed); }
+    else { if(codec==="libvpx-vp9") a.push("-crf",quality,"-b:v","0"); else a.push("-crf",quality,"-preset",speed); }
+    if(enc==="hevc_nvenc"||enc==="hevc_amf"||codec==="libx265") a.push("-tag:v","hvc1");
+    return a;
+  }
+  function setupAccelUI(){
+    var accel=$("vAccel").value;
+    rebuildPresets(accel);
+    var vp9=$("vCodec").querySelector('option[value="libvpx-vp9"]');
+    if(accel==="cpu"){ vp9.disabled=false; }
+    else { vp9.disabled=true; if($("vCodec").value==="libvpx-vp9") $("vCodec").value="libx264"; }
+    $("vCrfLabel").textContent = accel==="nvenc" ? "Quality — CQ" : (accel==="amf" ? "Quality — QP" : "Quality — CRF");
+    suggestOutputExt();
+  }
+
+  /* ---------------- builders ---------------- */
+  function buildVideo(){
+    var codec=$("vCodec").value, accel=$("vAccel").value, args=["ffmpeg"];
+    if($("overwrite").checked) args.push("-y");
+    args.push("-i", inTok());
+    var vf=[];
+    if($("vScale").value) vf.push("scale=-2:"+$("vScale").value);
+    if(vf.length) args.push("-vf", vf.join(","));
+    if($("vFps").value) args.push("-r", $("vFps").value);
+    var e=encoderArgs(codec, accel, $("vCrf").value, $("vPreset").value);
+    for(var i=0;i<e.length;i++) args.push(e[i]);
+    if(codec!=="libvpx-vp9" && $("vCompat").checked) args.push("-pix_fmt","yuv420p");
+    if($("vDropAudio").checked){ args.push("-an"); }
+    else { args.push("-c:a", codec==="libvpx-vp9"?"libopus":"aac", "-b:a", $("vABitrate").value); }
+    if($("vFaststart").checked && codec!=="libvpx-vp9") args.push("-movflags","+faststart");
+    args.push(outTok(codec==="libvpx-vp9"?"webm":"mp4"));
+    var note="";
+    if(codec==="libvpx-vp9") note="VP9 outputs .webm.";
+    else if(accel!=="cpu") note="Hardware encoding via "+(accel==="nvenc"?"NVIDIA NVENC":"AMD AMF")+" — verify GPU support on the Help tab.";
+    return { args:args, note:note };
+  }
+
+  function buildAudio(){
+    var fmt=$("aFormat").value;
+    var enc={ mp3:"libmp3lame", m4a:"aac", opus:"libopus", wav:"pcm_s16le", flac:"flac" }[fmt];
+    var lossless=(fmt==="wav"||fmt==="flac");
+    var args=["ffmpeg"];
+    if($("overwrite").checked) args.push("-y");
+    args.push("-i", inTok(), "-vn", "-c:a", enc);
+    if(!lossless) args.push("-b:a", $("aBitrate").value);
+    args.push(outTok(fmt));
+    return { args:args, note:"" };
+  }
+
+  function buildGif(){
+    var fps=$("gFps").value, w=$("gWidth").value;
+    var filter="fps="+fps+",scale="+w+":-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse";
+    var args=["ffmpeg"];
+    if($("overwrite").checked) args.push("-y");
+    args.push("-i", inTok(), "-vf", filter, "-loop", "0", outTok("gif"));
+    return { args:args, note:"" };
+  }
+
+  function buildTrim(){
+    var start=$("tStart").value.trim(), end=$("tEnd").value.trim(), mode=$("tMode").value;
+    var ext = isBatch() ? globExt() : fileExt($("outFile").value)||"mp4";
+    var args=["ffmpeg"]; if($("overwrite").checked) args.push("-y");
+    var note;
+    if(mode==="copy"){
+      args.push("-ss", start, "-to", end, "-i", inTok(), "-c", "copy", outTok(ext));
+      note="Start may snap to the nearest keyframe. Switch to Re-encode for an exact cut.";
+    } else {
+      args.push("-i", inTok(), "-ss", start, "-to", end, "-c:v","libx264","-crf","18","-preset","veryfast","-c:a","aac", outTok(ext));
+      note="Frame-accurate cut. Times are HH:MM:SS (or seconds).";
+    }
+    return { args:args, note:note };
+  }
+
+  function buildFrames(){
+    var mode=$("fMode").value, fmt=$("fFmt").value, jpg=(fmt==="jpg");
+    var args=["ffmpeg"]; if($("overwrite").checked) args.push("-y");
+    var width=$("fWidth").value, scale = width ? (",scale="+width+":-1") : "";
+    var base = isBatch() ? batchBase() : null;
+    if(mode==="single"){
+      args.push("-ss", $("fTime").value.trim(), "-i", inTok(), "-frames:v","1");
+      if(jpg) args.push("-q:v","2");
+      args.push(isBatch() ? ('"'+base+'_frame.'+fmt+'"') : ('"frame.'+fmt+'"'));
+      return { args:args, note:"One frame at "+$("fTime").value.trim()+"." };
+    }
+    if(mode==="thumbs"){
+      var n=$("fInterval").value;
+      args.push("-i", inTok(), "-vf", "fps=1/"+n+scale);
+      if(jpg) args.push("-q:v","2");
+      args.push(isBatch() ? ('"'+base+'_%04d.'+fmt+'"') : ('"thumb_%04d.'+fmt+'"'));
+      return { args:args, note:"One frame every "+n+"s, numbered sequentially." };
+    }
+    var iv=$("fInterval").value, cols=$("fCols").value, rows=$("fRows").value;
+    args.push("-i", inTok(), "-frames:v","1","-vf","fps=1/"+iv+scale+",tile="+cols+"x"+rows);
+    if(jpg) args.push("-q:v","2");
+    args.push(isBatch() ? ('"'+base+'_contact.'+fmt+'"') : ('"contact.'+fmt+'"'));
+    return { args:args, note:cols+"\u00d7"+rows+" grid sampling a frame every "+iv+"s. Short clips fill fewer cells." };
+  }
+
+  function buildInspect(){
+    var mode=$("iMode").value, args=["ffprobe"];
+    if(mode==="summary"){ args.push("-hide_banner", inTok()); }
+    else if(mode==="json"){ args.push("-v","error","-show_format","-show_streams","-of","json", inTok()); }
+    else {
+      args.push("-v","error","-select_streams","v:0",
+        "-show_entries","stream=codec_name,width,height,r_frame_rate",
+        "-show_entries","format=duration,bit_rate,size",
+        "-of","default=noprint_wrappers=1", inTok());
+    }
+    var note = mode==="summary" ? "Human-readable overview (prints to the terminal)." : (mode==="json" ? "Full stream + format data as JSON." : "Key fields only.");
+    return { args:args, note:note };
+  }
+
+  function buildConcat(){
+    var raw=$("cInputs").value.split(/\r?\n/), files=[], mix=$("cMix").checked;
+    for(var i=0;i<raw.length;i++){
+      var t=raw[i].trim(); if(!t) continue;
+      var silent=false, m=t.match(/\s*\[silent\]\s*$/i);
+      if(m){ silent=true; t=t.slice(0,m.index).trim(); }
+      files.push({ name:t, silent: mix && silent });
+    }
+    if(files.length<2) return { args:["ffmpeg"], note:"Add at least two input files (one per line) to build a concat command." };
+    var res=$("cRes").value.split("x"), W=res[0], H=res[1];
+    var fps=$("cFps").value, crf=$("cCrf").value, ab=$("cABitrate").value, N=files.length;
+    var anySilent=false; for(var s=0;s<N;s++){ if(files[s].silent) anySilent=true; }
+    var sh=curShell();
+
+    var args=["ffmpeg"]; if($("overwrite").checked) args.push("-y");
+    for(var k=0;k<N;k++){ args.push("-i", q(files[k].name)); }
+
+    var silIdx={}, counter=0, cmdPrelude=[];
+    if(anySilent){
+      for(var j=0;j<N;j++){
+        if(!files[j].silent) continue;
+        silIdx[j]=N+counter;
+        var durTok;
+        if(sh==="pwsh") durTok='"$((ffprobe -v error -show_entries format=duration -of csv=p=0 '+sq(files[j].name)+').Trim())"';
+        else if(sh==="cmd"){ durTok='!DUR'+counter+'!'; cmdPrelude.push('for /f "usebackq delims=" %%A in (`ffprobe -v error -show_entries format=duration -of csv=p=0 '+q(files[j].name)+'`) do set "DUR'+counter+'=%%A"'); }
+        else durTok='"$(ffprobe -v error -show_entries format=duration -of csv=p=0 '+q(files[j].name)+')"';
+        counter++;
+        args.push("-f","lavfi","-t",durTok,"-i","anullsrc=channel_layout=stereo:sample_rate=48000");
+      }
+    }
+
+    var V="scale="+W+":"+H+":force_original_aspect_ratio=decrease,pad="+W+":"+H+":(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps="+fps+",format=yuv420p";
+    var A="aresample=48000,aformat=sample_rates=48000:channel_layouts=stereo";
+    var parts=[], labels=[];
+    for(var p=0;p<N;p++){
+      var ain = files[p].silent ? ("["+silIdx[p]+":a]") : ("["+p+":a]");
+      parts.push("["+p+":v]"+V+"[v"+p+"]");
+      parts.push(ain+A+"[a"+p+"]");
+      labels.push("[v"+p+"][a"+p+"]");
+    }
+    var filter=parts.join(";")+";"+labels.join("")+"concat=n="+N+":v=1:a=1[outv][outa]";
+    args.push("-filter_complex", q(filter), "-map", q("[outv]"), "-map", q("[outa]"));
+    var accel=$("cAccel").value, speed = accel==="nvenc"?"p4":(accel==="amf"?"balanced":"medium");
+    var e=encoderArgs("libx264", accel, crf, speed);
+    for(var x=0;x<e.length;x++) args.push(e[x]);
+    args.push("-pix_fmt","yuv420p","-c:a","aac","-b:a",ab,"-movflags","+faststart", q($("cOut").value));
+
+    var note="Mismatched sizes are fit to "+W+"\u00d7"+H+" and letterboxed. Frame rate, pixel format and audio are normalized so the segments concatenate cleanly.";
+    if(accel!=="cpu") note+=" Encoding on "+(accel==="nvenc"?"NVIDIA NVENC":"AMD AMF")+".";
+    if(anySilent && sh==="cmd"){
+      var rawCmd="@echo off & setlocal enabledelayedexpansion\n"+cmdPrelude.join("\n")+"\n"+args.join(" ");
+      return { raw:rawCmd, note:note+" Silent clips probed via for /f — save as a .bat file." };
+    }
+    if(anySilent) note+=" Silent clips get matching-length silence (probed with ffprobe in "+(sh==="pwsh"?"PowerShell":"bash")+").";
+    return { args:args, note:note };
+  }
+
+  var builders={ video:buildVideo, audio:buildAudio, gif:buildGif, trim:buildTrim, frames:buildFrames, inspect:buildInspect };
+
+  /* ---------------- render ---------------- */
+  function classify(tok){
+    if(tok==="ffmpeg"||tok==="ffprobe") return "t-bin";
+    if(tok.charAt(0)==="-") return "t-flag";
+    if(tok.charAt(0)==='"') return tok.indexOf("[")!==-1 ? "t-filter" : "t-file";
+    return "t-value";
+  }
+  function escapeHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  var currentCmd="";
+  function render(){
+    if(state.mode==="help") return;
+    var res = (state.mode==="concat") ? buildConcat() : builders[state.tab]();
+
+    if(res.raw){
+      currentCmd=res.raw;
+      $("cmd").innerHTML='<span class="t-value">'+escapeHtml(res.raw)+'</span>';
+      $("cmdNote").textContent=res.note||"";
+      return;
+    }
+
+    var innerPlain=res.args.join(" "), innerHtml="";
+    for(var i=0;i<res.args.length;i++){
+      innerHtml+='<span class="'+classify(res.args[i])+'">'+escapeHtml(res.args[i])+'</span>';
+      if(i<res.args.length-1) innerHtml+=" ";
+    }
+    var prompt = curShell()==="pwsh" ? "PS&gt; " : (curShell()==="cmd" ? "&gt; " : "$ ");
+    if(isBatch()){
+      var pat=batchPattern(), pre, suf;
+      if(curShell()==="pwsh"){ pre="Get-ChildItem -File "+pat+" | ForEach-Object { "; suf=" }"; }
+      else if(curShell()==="cmd"){ pre="for %f in ("+pat+") do "; suf=""; }
+      else { pre="for f in "+pat+"; do "; suf="; done"; }
+      currentCmd=pre+innerPlain+suf;
+      $("cmd").innerHTML='<span class="prompt">'+prompt+'</span><span class="t-shell">'+escapeHtml(pre)+'</span>'+innerHtml+(suf?('<span class="t-shell">'+escapeHtml(suf)+'</span>'):'');
+    } else {
+      currentCmd=innerPlain;
+      $("cmd").innerHTML='<span class="prompt">'+prompt+'</span>'+innerHtml;
+    }
+    $("cmdNote").textContent=res.note||"";
+  }
+
+  /* ---------------- ext suggestion + per-tab UI ---------------- */
+  function genExt(){
+    if(state.tab==="video") return $("vCodec").value==="libvpx-vp9"?"webm":"mp4";
+    if(state.tab==="audio") return $("aFormat").value;
+    if(state.tab==="gif")   return "gif";
+    if(state.tab==="trim")  return fileExt($("inFile").value)||"mp4";
+    return "mp4";
+  }
+  function suggestOutputExt(){
+    if(state.mode==="concat"){ $("cOut").value=stripExt($("cOut").value)+".mp4"; }
+    else if(state.tab==="frames"||state.tab==="inspect"){ /* own/no output */ }
+    else { $("outFile").value = stripExt($("outFile").value)+"."+genExt(); }
+    render();
+  }
+  function syncAudioUI(){ var l=($("aFormat").value==="wav"||$("aFormat").value==="flac"); $("aBitrateField").style.display = l?"none":""; }
+  function updateFramesUI(){
+    var m=$("fMode").value;
+    $("fTimeField").style.display     = m==="single" ? "" : "none";
+    $("fIntervalField").style.display = (m==="thumbs"||m==="contact") ? "" : "none";
+    $("fColsField").style.display     = m==="contact" ? "" : "none";
+    $("fRowsField").style.display     = m==="contact" ? "" : "none";
+    $("fWidthField").style.display    = (m==="thumbs"||m==="contact") ? "" : "none";
+  }
+  function updateIOVisibility(){
+    var batch=$("batchOn").checked;
+    var usesOut = (state.tab!=="frames" && state.tab!=="inspect");
+    $("ioNormal").style.display = batch ? "none" : "";
+    $("ioBatch").style.display  = batch ? "" : "none";
+    $("outField").style.display = usesOut ? "" : "none";
+    $("batchSuffixField").style.display = usesOut ? "" : "none";
+  }
+
+  function applyVideoPreset(p){
+    var v={ codec:"libx264", crf:"23", preset:"medium", abitrate:"128k" };
+    if(p==="small"){ v.codec="libx265"; v.crf="28"; v.abitrate="96k"; }
+    $("vCodec").value=v.codec; $("vCrf").value=v.crf; $("vPreset").value=v.preset;
+    $("vABitrate").value=v.abitrate; $("vCompat").checked=true; $("vFaststart").checked=true;
+    suggestOutputExt();
+  }
+
+  /* ---------------- copy (file:// safe) ---------------- */
+  function copyCmd(){
+    var btn=$("copyBtn");
+    function done(){ btn.textContent="Copied"; btn.classList.add("done"); setTimeout(function(){ btn.textContent="Copy"; btn.classList.remove("done"); },1400); }
+    function fallback(){ var ta=document.createElement("textarea"); ta.value=currentCmd; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); done(); }catch(e){} document.body.removeChild(ta); }
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(currentCmd).then(done, fallback); } else { fallback(); }
+  }
+
+  /* ---------------- wiring ---------------- */
+  Array.prototype.forEach.call(document.querySelectorAll(".mode"), function(m){
+    m.addEventListener("click", function(){
+      state.mode=m.getAttribute("data-mode");
+      Array.prototype.forEach.call(document.querySelectorAll(".mode"), function(x){ x.setAttribute("aria-selected", x===m ? "true":"false"); });
+      $("mode-generator").classList.toggle("active", state.mode==="generator");
+      $("mode-concat").classList.toggle("active", state.mode==="concat");
+      $("mode-help").classList.toggle("active", state.mode==="help");
+      document.querySelector(".out").style.display = state.mode==="help" ? "none" : "";
+      if(state.mode!=="help") suggestOutputExt();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(t){
+    t.addEventListener("click", function(){
+      state.tab=t.getAttribute("data-tab");
+      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(x){ x.setAttribute("aria-selected", x===t ? "true":"false"); });
+      Array.prototype.forEach.call(document.querySelectorAll(".panel"), function(p){ p.classList.remove("active"); });
+      $("p-"+state.tab).classList.add("active");
+      updateIOVisibility();
+      suggestOutputExt();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-vp]"), function(b){
+    b.addEventListener("click", function(){ applyVideoPreset(b.getAttribute("data-vp")); });
+  });
+  $("vCodec").addEventListener("change", suggestOutputExt);
+  $("vAccel").addEventListener("change", setupAccelUI);
+  $("aFormat").addEventListener("change", function(){ syncAudioUI(); suggestOutputExt(); });
+  $("fMode").addEventListener("change", function(){ updateFramesUI(); render(); });
+  $("cMix").addEventListener("change", function(){ $("cMixHint").style.display = this.checked ? "" : "none"; });
+  $("batchOn").addEventListener("change", function(){ updateIOVisibility(); render(); });
+  $("inFile").addEventListener("input", function(){ if(state.tab==="trim") suggestOutputExt(); });
+  document.addEventListener("input", render);
+  document.addEventListener("change", render);
+  $("copyBtn").addEventListener("click", copyCmd);
+
+  syncAudioUI();
+  updateFramesUI();
+  updateIOVisibility();
+  setupAccelUI();
+})();
+</script>
+</body>
+</html>

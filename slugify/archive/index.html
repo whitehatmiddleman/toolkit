@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slugify</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e6e8ec;
+    --muted: #9aa1ad;
+    --accent: #6ea8fe;
+    --accent-dim: #3d5a8a;
+    --good: #5fd38d;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 18px 64px; }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: .3px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 780px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  label.field { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 5px; }
+  label.field:first-child { margin-top: 0; }
+  textarea, input[type=text] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 9px 10px;
+    font-family: var(--mono);
+    font-size: 13px;
+    resize: vertical;
+  }
+  textarea { min-height: 200px; }
+  textarea:focus, input:focus { outline: 2px solid var(--accent-dim); outline-offset: 0; }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .row label { font-size: 13px; color: var(--text); cursor: pointer; }
+  .sep-input { width: 64px; }
+  select {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 7px; padding: 7px 8px; font-size: 13px;
+  }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .btns { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  button {
+    background: var(--accent-dim); color: var(--text); border: 1px solid var(--accent-dim);
+    border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  button.ghost { background: transparent; border-color: var(--border); }
+  button:hover { filter: brightness(1.15); }
+  button:active { filter: brightness(.95); }
+  .out-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .count { font-size: 12px; color: var(--muted); }
+  .results { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow: auto; }
+  .res-row {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px;
+  }
+  .res-row .orig { color: var(--muted); font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .res-row .arrow { color: var(--accent-dim); }
+  .res-row .slug { color: var(--good); font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 2px; }
+  kbd { background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-family: var(--mono); font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Slugify</h1>
+  <p class="sub">Paste rows from Excel (one per line) or type entries one at a time. Output updates live.</p>
+
+  <div class="grid">
+    <!-- INPUT -->
+    <div class="panel">
+      <label class="field" for="input">Input — one entry per line</label>
+      <textarea id="input" placeholder="Hello World!&#10;Café & Bar №2&#10;Product / SKU-001"></textarea>
+      <div class="hint">Excel paste works directly. Tab-separated cells: choose which column below.</div>
+    </div>
+
+    <!-- OPTIONS -->
+    <div class="panel">
+      <label class="field">Options</label>
+      <div class="opts">
+        <div class="row">
+          <input type="checkbox" id="lower" checked>
+          <label for="lower">Lowercase</label>
+        </div>
+        <div class="row">
+          <input type="checkbox" id="accents" checked>
+          <label for="accents">Strip accents (é → e)</label>
+        </div>
+        <div class="row">
+          <input type="checkbox" id="translit" checked>
+          <label for="translit">Transliterate (ß → ss, ø → o)</label>
+        </div>
+        <div class="row">
+          <input type="checkbox" id="collapse" checked>
+          <label for="collapse">Collapse repeats</label>
+        </div>
+        <div class="row">
+          <input type="checkbox" id="trimSep" checked>
+          <label for="trimSep">Trim edge separators</label>
+        </div>
+        <div class="row">
+          <label for="sep" style="color:var(--muted)">Separator</label>
+          <input type="text" id="sep" class="sep-input" value="-" maxlength="3">
+        </div>
+        <div class="row">
+          <label for="col" style="color:var(--muted)">Tab column</label>
+          <select id="col">
+            <option value="-1">Whole line</option>
+            <option value="0">1st</option>
+            <option value="1">2nd</option>
+            <option value="2">3rd</option>
+            <option value="3">4th</option>
+          </select>
+        </div>
+      </div>
+
+      <label class="field" for="remove">Remove characters (each char deleted)</label>
+      <input type="text" id="remove" placeholder="e.g. №™®'">
+      <div class="hint">Every character typed here is stripped before slugifying.</div>
+
+      <label class="field" for="replace">Replace pairs — one per line, <kbd>from=to</kbd></label>
+      <textarea id="replace" style="min-height:80px" placeholder="&=and&#10;@=at&#10;%=percent"></textarea>
+      <div class="hint">Applied first, so replacements survive removal. Right side may be empty.</div>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="panel" style="margin-top:16px">
+    <div class="out-head">
+      <label class="field" style="margin:0">Output</label>
+      <div class="count" id="count">0 entries</div>
+    </div>
+    <div class="btns">
+      <button id="copySlugs">Copy slugs</button>
+      <button class="ghost" id="copyTsv">Copy as TSV (original + slug)</button>
+      <button class="ghost" id="clear">Clear input</button>
+    </div>
+    <div class="results" id="results" style="margin-top:12px">
+      <div class="empty">Slugs appear here.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---- DOM refs ----
+const els = {
+  input:   document.getElementById("input"),
+  lower:   document.getElementById("lower"),
+  accents: document.getElementById("accents"),
+  translit:document.getElementById("translit"),
+  collapse:document.getElementById("collapse"),
+  trimSep: document.getElementById("trimSep"),
+  sep:     document.getElementById("sep"),
+  col:     document.getElementById("col"),
+  remove:  document.getElementById("remove"),
+  replace: document.getElementById("replace"),
+  results: document.getElementById("results"),
+  count:   document.getElementById("count"),
+};
+
+// Escape a string for safe use inside a RegExp character class / pattern.
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Parse the "from=to" replacement lines into ordered pairs.
+function parseReplacements(raw) {
+  const pairs = [];
+  for (const line of raw.split("\n")) {
+    if (!line) continue;
+    const i = line.indexOf("=");
+    if (i === -1) continue;            // skip lines without '='
+    const from = line.slice(0, i);
+    const to = line.slice(i + 1);
+    if (from) pairs.push([from, to]);  // empty 'from' would loop forever
+  }
+  return pairs;
+}
+
+// Pick the requested tab-column, or the whole line.
+function pickColumn(line, colIdx) {
+  if (colIdx < 0) return line;
+  const cells = line.split("\t");
+  return cells[colIdx] !== undefined ? cells[colIdx] : "";
+}
+
+// Letters that Unicode NFD cannot decompose (ligatures, stroked/special
+// letters). Mapped preserving case so the result is correct even when the
+// "Lowercase" option is off.
+const TRANSLIT = {
+  "ß":"ss","ẞ":"SS",
+  "æ":"ae","Æ":"AE","œ":"oe","Œ":"OE",
+  "ø":"o","Ø":"O",
+  "ð":"d","Ð":"D","đ":"d","Đ":"D",
+  "þ":"th","Þ":"Th",
+  "ł":"l","Ł":"L",
+  "ı":"i","İ":"I",
+  "ŋ":"ng","Ŋ":"NG",
+  "ħ":"h","Ħ":"H","ĸ":"k","ŧ":"t","Ŧ":"T",
+  "ª":"a","º":"o",
+};
+
+// Replace special letters using the map above (single pass over code points).
+function transliterate(str) {
+  let out = "";
+  for (const ch of str) out += (TRANSLIT[ch] !== undefined ? TRANSLIT[ch] : ch);
+  return out;
+}
+
+// Core slug transform for a single string, given resolved options.
+function slugify(str, opt) {
+  let s = str;
+
+  // 1. Custom replacements first (literal, all occurrences).
+  for (const [from, to] of opt.replacements) {
+    s = s.split(from).join(to);
+  }
+
+  // 2. Transliterate special letters NFD can't handle.
+  if (opt.translit) {
+    s = transliterate(s);
+  }
+
+  // 3. Strip accents via Unicode decomposition.
+  if (opt.accents) {
+    s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+
+  // 4. Remove user-listed characters.
+  if (opt.removeSet.size) {
+    s = Array.from(s).filter(ch => !opt.removeSet.has(ch)).join("");
+  }
+
+  // 5. Case.
+  if (opt.lower) s = s.toLowerCase();
+
+  // 6. Everything that isn't a letter/number becomes the separator.
+  //    (\p{L}\p{N} keeps non-Latin letters/digits too.)
+  s = s.replace(/[^\p{L}\p{N}]+/gu, opt.sep || "");
+
+  // 7. Collapse repeated separators.
+  if (opt.collapse && opt.sep) {
+    const e = escapeRegExp(opt.sep);
+    s = s.replace(new RegExp("(?:" + e + ")+", "g"), opt.sep);
+  }
+
+  // 8. Trim separators from the ends.
+  if (opt.trimSep && opt.sep) {
+    const e = escapeRegExp(opt.sep);
+    s = s.replace(new RegExp("^(?:" + e + ")+|(?:" + e + ")+$", "g"), "");
+  }
+
+  return s;
+}
+
+// Read all current options once per run.
+function readOptions() {
+  return {
+    lower:        els.lower.checked,
+    accents:      els.accents.checked,
+    translit:     els.translit.checked,
+    collapse:     els.collapse.checked,
+    trimSep:      els.trimSep.checked,
+    sep:          els.sep.value,
+    colIdx:       parseInt(els.col.value, 10),
+    removeSet:    new Set(Array.from(els.remove.value)),
+    replacements: parseReplacements(els.replace.value),
+  };
+}
+
+// Compute the current original/slug pairs (skips fully blank lines).
+function compute() {
+  const opt = readOptions();
+  const lines = els.input.value.split(/\r?\n/);
+  const rows = [];
+  for (const line of lines) {
+    const original = pickColumn(line, opt.colIdx);
+    if (original.trim() === "") continue;
+    rows.push({ original, slug: slugify(original, opt) });
+  }
+  return rows;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+}
+
+let lastRows = [];
+
+function render() {
+  lastRows = compute();
+  els.count.textContent = lastRows.length + (lastRows.length === 1 ? " entry" : " entries");
+
+  if (lastRows.length === 0) {
+    els.results.innerHTML = '<div class="empty">Slugs appear here.</div>';
+    return;
+  }
+  els.results.innerHTML = lastRows.map(r =>
+    '<div class="res-row">' +
+      '<span class="orig">' + escapeHtml(r.original) + '</span>' +
+      '<span class="arrow">&rarr;</span>' +
+      '<span class="slug">' + escapeHtml(r.slug || "(empty)") + '</span>' +
+    '</div>'
+  ).join("");
+}
+
+// ---- Clipboard ----
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    // file:// fallback when Clipboard API is blocked.
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+}
+
+function flash(btn, msg) {
+  const old = btn.textContent;
+  btn.textContent = msg;
+  setTimeout(() => { btn.textContent = old; }, 1100);
+}
+
+// ---- Events ----
+[els.input, els.remove, els.replace, els.sep].forEach(el => el.addEventListener("input", render));
+[els.lower, els.accents, els.translit, els.collapse, els.trimSep, els.col].forEach(el => el.addEventListener("change", render));
+
+document.getElementById("copySlugs").addEventListener("click", async function () {
+  if (!lastRows.length) return flash(this, "Nothing to copy");
+  const ok = await copyText(lastRows.map(r => r.slug).join("\n"));
+  flash(this, ok ? "Copied!" : "Copy failed");
+});
+
+document.getElementById("copyTsv").addEventListener("click", async function () {
+  if (!lastRows.length) return flash(this, "Nothing to copy");
+  const tsv = lastRows.map(r => r.original + "\t" + r.slug).join("\n");
+  const ok = await copyText(tsv);
+  flash(this, ok ? "Copied!" : "Copy failed");
+});
+
+document.getElementById("clear").addEventListener("click", function () {
+  els.input.value = "";
+  render();
+  els.input.focus();
+});
+
+render();
+</script>
+</body>
+</html>

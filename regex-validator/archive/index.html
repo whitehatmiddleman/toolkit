@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regex Validator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #222;
+    --border: #333;
+    --text: #e0e0e0;
+    --text-dim: #888;
+    --accent: #4fc3f7;
+    --accent2: #81c784;
+    --error: #ef5350;
+    --mark-bg: #ff6f0055;
+    --mark-border: #ff6f00;
+    --mark-current-bg: #ff980099;
+    --mark-current-border: #ff9800;
+    --radius: 6px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  header h1 { font-size: 15px; font-weight: 600; color: var(--accent); }
+
+  .main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    grid-template-rows: 1fr;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* LEFT PANEL */
+  .left-panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .match-count {
+    color: var(--accent2);
+    font-size: 11px;
+  }
+
+  .text-editor-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Shared font metrics — must be identical on both elements */
+  #text-mirror,
+  #text-input {
+    position: absolute;
+    inset: 0;
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow: auto;
+    tab-size: 4;
+  }
+
+  /* Mirror: renders highlighted HTML behind the textarea */
+  #text-mirror {
+    background: var(--bg);
+    color: var(--text);
+    border: none;
+    pointer-events: none;
+    /* hide scrollbar — textarea's scrollbar drives scrolling */
+    scrollbar-width: none;
+  }
+  #text-mirror::-webkit-scrollbar { display: none; }
+
+  #text-mirror mark {
+    background: var(--mark-bg);
+    border-bottom: 2px solid var(--mark-border);
+    border-radius: 2px;
+    color: inherit;
+  }
+
+  #text-mirror mark.current {
+    background: var(--mark-current-bg);
+    border-bottom-color: var(--mark-current-border);
+    box-shadow: 0 0 0 1px var(--mark-current-border);
+  }
+
+  /* Textarea: transparent text over the mirror */
+  #text-input {
+    background: transparent;
+    color: transparent;
+    caret-color: var(--accent);
+    border: none;
+    outline: none;
+    resize: none;
+    /* DOM order (textarea after mirror) already places it on top */
+  }
+
+  #text-input::placeholder { color: var(--text-dim); }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* REGEX INPUT */
+  .regex-section {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px;
+    flex-shrink: 0;
+  }
+
+  .regex-section .panel-header {
+    background: transparent;
+    border: none;
+    padding: 0 0 8px 0;
+  }
+
+  .regex-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px 8px;
+  }
+
+  .regex-slash { color: var(--text-dim); font-family: monospace; font-size: 16px; }
+
+  #pattern-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--accent);
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 14px;
+    caret-color: var(--text);
+  }
+
+  #flags-input {
+    width: 60px;
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--border);
+    outline: none;
+    color: var(--accent2);
+    font-family: monospace;
+    font-size: 13px;
+    padding-left: 6px;
+    caret-color: var(--text);
+  }
+
+  .flags-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .flag-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: monospace;
+    font-size: 12px;
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: all 0.1s;
+    user-select: none;
+  }
+
+  .flag-btn.active {
+    background: #1a3a4a;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  #btn-copy-regex {
+    align-self: stretch;
+    margin: -4px -8px -4px 0;
+    padding: 0 10px;
+    font-size: 11px;
+    flex-shrink: 0;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0 5px 5px 0;
+    background: transparent;
+    color: var(--text-dim);
+  }
+  #btn-copy-regex:hover {
+    background: #2a2a2a;
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .error-msg {
+    margin-top: 8px;
+    color: var(--error);
+    font-size: 12px;
+    font-family: monospace;
+    min-height: 16px;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+
+  .btn:hover { background: #2a2a2a; border-color: var(--accent); }
+  .btn.primary { border-color: var(--accent); color: var(--accent); }
+  .btn.primary:hover { background: #1a3a4a; }
+
+  /* MATCH INSPECTOR */
+  .inspector-section {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    display: none;
+    flex-direction: column;
+    max-height: 165px;
+  }
+
+  .inspector-section.visible { display: flex; }
+
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .stepper .btn {
+    padding: 1px 7px;
+    font-size: 13px;
+  }
+
+  #step-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    min-width: 46px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .inspector-body {
+    overflow-y: auto;
+    padding: 6px 12px 8px;
+    flex: 1;
+  }
+
+  .insp-row {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+    font-family: 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .insp-label {
+    color: var(--text-dim);
+    flex-shrink: 0;
+    min-width: 76px;
+    font-size: 11px;
+  }
+
+  .insp-value { color: var(--accent2); word-break: break-all; }
+  .insp-match { color: var(--accent); }
+  .insp-undef { color: var(--text-dim); font-style: italic; }
+
+  /* REFERENCE PANEL */
+  .reference-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .tab-bar {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+
+  .tab-bar::-webkit-scrollbar { height: 3px; }
+  .tab-bar::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-dim);
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.1s;
+  }
+
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Reference tables */
+  .ref-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-family: 'Fira Code', monospace;
+  }
+
+  .ref-table th {
+    text-align: left;
+    color: var(--text-dim);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ref-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #1e1e1e;
+    vertical-align: top;
+  }
+
+  .ref-table td:first-child {
+    color: var(--accent);
+    white-space: nowrap;
+    width: 110px;
+  }
+
+  .ref-table td:last-child {
+    color: var(--text-dim);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 11px;
+  }
+
+  .ref-section-title {
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 14px 0 4px;
+  }
+
+  .ref-section-title:first-child { margin-top: 0; }
+
+  /* MODAL */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: #000a;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    width: 520px;
+    max-width: 95vw;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  .modal h2 { font-size: 14px; margin-bottom: 14px; color: var(--accent); }
+
+  .escape-variant { margin-bottom: 12px; }
+
+  .escape-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+
+  .escape-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .modal-code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--accent2);
+    word-break: break-all;
+    flex: 1;
+    min-height: 32px;
+  }
+
+  .escape-row .btn {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    align-self: flex-start;
+    margin-top: 1px;
+  }
+
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+  /* scrollbar global */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Regex Validator</h1>
+  <span style="color:var(--text-dim);font-size:12px;">JS RegExp engine · dark mode</span>
+  <button class="btn" id="btn-share" style="margin-left:auto;">Share</button>
+</header>
+
+<div class="main">
+  <!-- LEFT: TEXT EDITOR -->
+  <div class="left-panel">
+    <div class="panel-header">
+      Test Text
+      <span class="match-count" id="match-count"></span>
+    </div>
+    <div class="text-editor-wrap">
+      <div id="text-mirror" aria-hidden="true"></div>
+      <textarea id="text-input" spellcheck="false" placeholder="Paste or type text here…"></textarea>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right-panel">
+    <!-- REGEX INPUT -->
+    <div class="regex-section">
+      <div class="panel-header">Pattern</div>
+      <div class="regex-row">
+        <span class="regex-slash">/</span>
+        <input id="pattern-input" type="text" placeholder="regex pattern…" autocomplete="off" spellcheck="false">
+        <span class="regex-slash">/</span>
+        <input id="flags-input" type="text" placeholder="gi" maxlength="10" autocomplete="off" spellcheck="false">
+        <button class="btn" id="btn-copy-regex" title="Copy /pattern/flags">Copy</button>
+      </div>
+      <div class="flags-row" id="flag-buttons">
+        <button class="flag-btn active" data-flag="g">g</button>
+        <button class="flag-btn" data-flag="i">i</button>
+        <button class="flag-btn" data-flag="m">m</button>
+        <button class="flag-btn" data-flag="s">s</button>
+        <button class="flag-btn" data-flag="u">u</button>
+      </div>
+      <div class="error-msg" id="error-msg"></div>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-escape">Escape Strings</button>
+        <button class="btn" id="btn-clear">Clear Text</button>
+      </div>
+    </div>
+
+    <!-- MATCH INSPECTOR -->
+    <div class="inspector-section" id="inspector-section">
+      <div class="panel-header">
+        Match Inspector
+        <div class="stepper">
+          <button class="btn" id="btn-prev">&#8592;</button>
+          <span id="step-label"></span>
+          <button class="btn" id="btn-next">&#8594;</button>
+        </div>
+      </div>
+      <div class="inspector-body" id="inspector-body"></div>
+    </div>
+
+    <!-- REFERENCE PANEL -->
+    <div class="reference-section">
+      <div class="tab-bar" id="tab-bar">
+        <button class="tab-btn active" data-tab="js">JS</button>
+        <button class="tab-btn" data-tab="python">Python</button>
+        <button class="tab-btn" data-tab="go">Go</button>
+        <button class="tab-btn" data-tab="java">Java</button>
+        <button class="tab-btn" data-tab="pcre">PCRE</button>
+        <button class="tab-btn" data-tab="posix">POSIX</button>
+      </div>
+      <div class="tab-content" id="tab-content">
+        <div class="tab-pane active" id="tab-js"></div>
+        <div class="tab-pane" id="tab-python"></div>
+        <div class="tab-pane" id="tab-go"></div>
+        <div class="tab-pane" id="tab-java"></div>
+        <div class="tab-pane" id="tab-pcre"></div>
+        <div class="tab-pane" id="tab-posix"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ESCAPE MODAL -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <h2>Escaped Pattern Strings</h2>
+    <div id="escape-variants-container"></div>
+    <div class="modal-footer">
+      <button class="btn" id="btn-modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Reference Data ───────────────────────────────────────────────────────────
+
+const REF = {
+  js: [
+    { section: 'Character Classes' },
+    ['.', 'Any character except newline (with s flag: including newline)'],
+    ['\\w', 'Word character [a-zA-Z0-9_]'],
+    ['\\W', 'Non-word character'],
+    ['\\d', 'Digit [0-9]'],
+    ['\\D', 'Non-digit'],
+    ['\\s', 'Whitespace (space, tab, newline, etc.)'],
+    ['\\S', 'Non-whitespace'],
+    ['[abc]', 'Character class: a, b, or c'],
+    ['[^abc]', 'Negated class: not a, b, or c'],
+    ['[a-z]', 'Range: a through z'],
+    { section: 'Anchors' },
+    ['^', 'Start of string (or line with m flag)'],
+    ['$', 'End of string (or line with m flag)'],
+    ['\\b', 'Word boundary'],
+    ['\\B', 'Non-word boundary'],
+    { section: 'Quantifiers' },
+    ['*', 'Zero or more (greedy)'],
+    ['+', 'One or more (greedy)'],
+    ['?', 'Zero or one (greedy)'],
+    ['{n}', 'Exactly n times'],
+    ['{n,}', 'At least n times'],
+    ['{n,m}', 'Between n and m times'],
+    ['*?  +?  ??', 'Lazy (non-greedy) versions'],
+    { section: 'Groups & Lookaround' },
+    ['(abc)', 'Capturing group'],
+    ['(?:abc)', 'Non-capturing group'],
+    ['(?<name>…)', 'Named capturing group'],
+    ['(?=abc)', 'Positive lookahead'],
+    ['(?!abc)', 'Negative lookahead'],
+    ['(?<=abc)', 'Positive lookbehind'],
+    ['(?<!abc)', 'Negative lookbehind'],
+    { section: 'Flags' },
+    ['g', 'Global — find all matches'],
+    ['i', 'Case-insensitive'],
+    ['m', 'Multiline — ^ and $ match line boundaries'],
+    ['s', 'Dot-all — . matches newline'],
+    ['u', 'Unicode mode'],
+    ['d', 'Indices — match.indices array'],
+    { section: 'Special' },
+    ['\\n  \\t  \\r', 'Newline, tab, carriage return'],
+    ['\\uXXXX', 'Unicode escape (4 hex digits)'],
+    ['\\u{XXXXX}', 'Unicode escape (with u flag)'],
+    ['\\0', 'Null character'],
+  ],
+  python: [
+    { section: 'Import & Compile' },
+    ['import re', 'Standard library — no install needed'],
+    ['re.compile(p, re.I)', 'Compile pattern with flags'],
+    ['re.search(p, s)', 'First match anywhere in string'],
+    ['re.match(p, s)', 'Match at start only'],
+    ['re.fullmatch(p, s)', 'Match entire string'],
+    ['re.findall(p, s)', 'List of all non-overlapping matches'],
+    ['re.finditer(p, s)', 'Iterator of match objects'],
+    ['re.sub(p, r, s)', 'Replace matches'],
+    ['re.split(p, s)', 'Split by pattern'],
+    { section: 'Flags' },
+    ['re.I / IGNORECASE', 'Case-insensitive'],
+    ['re.M / MULTILINE', '^ and $ match line boundaries'],
+    ['re.S / DOTALL', '. matches newline'],
+    ['re.X / VERBOSE', 'Allow whitespace/comments in pattern'],
+    ['re.A / ASCII', 'ASCII-only \\w \\d \\s'],
+    { section: 'Character Classes' },
+    ['\\d', 'Digit (Unicode-aware by default)'],
+    ['\\w', 'Word char (Unicode-aware)'],
+    ['\\s', 'Whitespace (Unicode-aware)'],
+    ['[^…]', 'Negated class'],
+    { section: 'Anchors & Boundaries' },
+    ['^  $', 'Start/end of string (or line w/ re.M)'],
+    ['\\A  \\Z', 'Absolute start/end of string'],
+    ['\\b  \\B', 'Word / non-word boundary'],
+    { section: 'Groups' },
+    ['(…)', 'Capturing group'],
+    ['(?:…)', 'Non-capturing group'],
+    ['(?P<name>…)', 'Named group'],
+    ['(?P=name)', 'Back-reference by name'],
+    ['(?=…)  (?!…)', 'Lookahead pos/neg'],
+    ['(?<=…)  (?<!…)', 'Lookbehind pos/neg'],
+    { section: 'Quantifiers' },
+    ['*  +  ?', 'Greedy'],
+    ['*?  +?  ??', 'Non-greedy (lazy)'],
+    ['{m}  {m,n}', 'Repetition'],
+  ],
+  go: [
+    { section: 'Package' },
+    ['import "regexp"', 'Standard library package'],
+    ['regexp.Compile(p)', 'Returns (*Regexp, error)'],
+    ['regexp.MustCompile(p)', 'Panics on invalid pattern'],
+    ['r.MatchString(s)', 'Returns bool'],
+    ['r.FindString(s)', 'First match string'],
+    ['r.FindAllString(s, n)', 'All matches (n=-1 for all)'],
+    ['r.FindStringSubmatch(s)', 'Match + groups'],
+    ['r.ReplaceAllString(s, r)', 'Replace matches'],
+    ['r.Split(s, n)', 'Split by pattern'],
+    { section: 'Syntax (RE2)' },
+    ['.', 'Any char except newline'],
+    ['[xyz]  [^xyz]', 'Character class / negated'],
+    ['\\d  \\w  \\s', 'Digit, word, whitespace'],
+    ['^  $', 'Start/end of text (or line with (?m))'],
+    ['\\b', 'Word boundary'],
+    { section: 'Flags (inline)' },
+    ['(?i)', 'Case-insensitive'],
+    ['(?m)', 'Multiline'],
+    ['(?s)', 'Dot matches newline'],
+    ['(?U)', 'Ungreedy by default'],
+    { section: 'Groups' },
+    ['(…)', 'Capturing group'],
+    ['(?:…)', 'Non-capturing group'],
+    ['(?P<name>…)', 'Named group'],
+    { section: 'RE2 Differences' },
+    ['No backrefs', 'RE2 does not support \\1 back-references'],
+    ['No lookaround', 'No lookahead/lookbehind assertions'],
+    ['No possessive', 'No possessive quantifiers (++, *+)'],
+    { section: 'Quantifiers' },
+    ['*  +  ?', 'Greedy'],
+    ['*?  +?  ??', 'Non-greedy'],
+    ['{n}  {n,m}', 'Repetition'],
+  ],
+  java: [
+    { section: 'Classes' },
+    ['import java.util.regex.*;', 'Java regex package'],
+    ['Pattern.compile(p)', 'Compile pattern'],
+    ['Pattern.compile(p, flags)', 'Compile with flags'],
+    ['p.matcher(input)', 'Create Matcher'],
+    ['m.matches()', 'Entire input matches'],
+    ['m.find()', 'Find next match'],
+    ['m.group()', 'Return matched text'],
+    ['m.group(n)', 'Return group n'],
+    ['m.group("name")', 'Return named group'],
+    ['m.replaceAll(r)', 'Replace all matches'],
+    ['m.start()  m.end()', 'Match start/end indices'],
+    { section: 'Pattern Flags' },
+    ['CASE_INSENSITIVE', 'Case-insensitive ((?i) inline)'],
+    ['MULTILINE', '^ and $ match line ends ((?m))'],
+    ['DOTALL', '. matches newline ((?s))'],
+    ['COMMENTS', 'Allow whitespace/comments ((?x))'],
+    ['UNICODE_CASE', 'Unicode-aware case folding'],
+    { section: 'Character Classes' },
+    ['.', 'Any char (not newline without DOTALL)'],
+    ['\\w  \\W', 'Word / non-word [a-zA-Z0-9_]'],
+    ['\\d  \\D', 'Digit / non-digit'],
+    ['\\s  \\S', 'Whitespace / non-whitespace'],
+    ['\\p{Alpha}', 'POSIX alpha class'],
+    ['\\p{L}', 'Unicode letter'],
+    ['\\p{Digit}', 'Unicode digit'],
+    { section: 'Groups & Lookaround' },
+    ['(…)', 'Capturing group'],
+    ['(?:…)', 'Non-capturing group'],
+    ['(?<name>…)', 'Named capturing group'],
+    ['\\k<name>', 'Back-reference to named group'],
+    ['(?=…)  (?!…)', 'Lookahead pos/neg'],
+    ['(?<=…)  (?<!…)', 'Lookbehind pos/neg'],
+    { section: 'Quantifiers' },
+    ['*  +  ?', 'Greedy'],
+    ['*?  +?  ??', 'Reluctant (lazy)'],
+    ['*+  ++  ?+', 'Possessive (no backtrack)'],
+    ['{n}  {n,m}', 'Repetition'],
+  ],
+  pcre: [
+    { section: 'Library' },
+    ['#include <pcre.h>', 'C library header'],
+    ['pcre_compile()', 'Compile pattern'],
+    ['pcre_exec()', 'Execute match'],
+    ['pcre2_*', 'PCRE2 (modern API)'],
+    { section: 'Character Classes' },
+    ['.', 'Any char except newline (DOTALL: incl. newline)'],
+    ['\\w  \\d  \\s', 'Word, digit, whitespace'],
+    ['\\h  \\v', 'Horizontal / vertical whitespace'],
+    ['\\p{L}', 'Unicode property: letter'],
+    ['\\P{L}', 'Negated Unicode property'],
+    ['[[:alpha:]]', 'POSIX class'],
+    { section: 'Anchors' },
+    ['^  $', 'Start/end (MULTILINE: per line)'],
+    ['\\A  \\Z  \\z', 'Start / end (\\Z allows final newline)'],
+    ['\\b  \\B', 'Word / non-word boundary'],
+    ['\\G', 'Start of current search position'],
+    { section: 'Groups & Lookaround' },
+    ['(…)', 'Capturing group'],
+    ['(?:…)', 'Non-capturing group'],
+    ['(?P<name>…)', 'Named group (also (?<name>…))'],
+    ['(?|…|…)', 'Branch reset group'],
+    ['(?=…)  (?!…)', 'Lookahead pos/neg'],
+    ['(?<=…)  (?<!…)', 'Lookbehind pos/neg'],
+    ['(?>…)', 'Atomic group (no backtrack)'],
+    { section: 'Flags (inline)' },
+    ['(?i)', 'Case-insensitive'],
+    ['(?m)', 'Multiline'],
+    ['(?s)', 'Dot-all'],
+    ['(?x)', 'Extended (allow whitespace/comments)'],
+    ['(?U)', 'Ungreedy by default'],
+    { section: 'Quantifiers & Backtracking' },
+    ['*  +  ?', 'Greedy'],
+    ['*?  +?  ??', 'Lazy'],
+    ['*+  ++  ?+', 'Possessive'],
+    ['{n,m}', 'Repetition'],
+    { section: 'Special' },
+    ['\\Q…\\E', 'Quote literal characters'],
+    ['(?#comment)', 'Inline comment'],
+    ['(*UTF)', 'Enable UTF-8 mode'],
+    ['(*SKIP)(*FAIL)', 'Verbs: skip match position'],
+  ],
+  posix: [
+    { section: 'Standards' },
+    ['BRE', 'Basic Regular Expressions — used by grep, sed (default)'],
+    ['ERE', 'Extended Regular Expressions — grep -E, awk, egrep'],
+    { section: 'POSIX Character Classes' },
+    ['[:alpha:]', 'Letters [a-zA-Z]'],
+    ['[:digit:]', 'Decimal digits [0-9]'],
+    ['[:alnum:]', 'Letters and digits'],
+    ['[:space:]', 'Whitespace (space, tab, newline, etc.)'],
+    ['[:blank:]', 'Space and tab only'],
+    ['[:upper:]', 'Uppercase letters'],
+    ['[:lower:]', 'Lowercase letters'],
+    ['[:punct:]', 'Punctuation characters'],
+    ['[:graph:]', 'Printable non-space characters'],
+    ['[:print:]', 'Printable characters including space'],
+    ['[:cntrl:]', 'Control characters'],
+    ['[:xdigit:]', 'Hexadecimal digits [0-9a-fA-F]'],
+    { section: 'Usage in Bracket Expressions' },
+    ['[[:alpha:]]', 'Single POSIX class in brackets'],
+    ['[[:alpha:][:digit:]]', 'Multiple classes combined'],
+    ['[^[:alpha:]]', 'Negated POSIX class'],
+    ['[[:lower:]A-Z]', 'Mixed: POSIX class + explicit range'],
+    { section: 'Anchors & Quantifiers (ERE)' },
+    ['^  $', 'Start/end of line'],
+    ['.', 'Any character except newline'],
+    ['*', 'Zero or more (greedy) — BRE and ERE'],
+    ['+', 'One or more (greedy) — ERE only'],
+    ['?', 'Zero or one — ERE only'],
+    ['{n,m}', 'Repetition — ERE; BRE uses \\{n,m\\}'],
+    { section: 'Groups & Alternation' },
+    ['(…)', 'Capturing group — ERE; BRE uses \\(…\\)'],
+    ['|', 'Alternation — ERE only; literal | in BRE'],
+    ['\\1…\\9', 'Back-references — supported in BRE; ERE: impl-defined'],
+    { section: 'BRE vs ERE Key Differences' },
+    ['BRE groups', '\\( \\) required; \\{n,m\\} for repetition'],
+    ['ERE groups', '( ) without backslash; {n,m} without backslash'],
+    ['BRE +  ?', '\\+ and \\? in some implementations only'],
+    ['ERE |', 'Alternation; not available in BRE'],
+    { section: 'Limitations vs Modern Engines' },
+    ['No lookahead', 'POSIX has no lookahead or lookbehind'],
+    ['No named groups', 'No (?P<name>…) or (?<name>…) syntax'],
+    ['No \\d \\w \\s', 'Use [[:digit:]] [[:alpha:]] [[:space:]] instead'],
+    ['No lazy quant.', 'All quantifiers are greedy'],
+    ['No Unicode props', 'No \\p{L} — use locale-aware [:alpha:] instead'],
+  ],
+};
+
+function buildRefTable(data) {
+  let html = '';
+  let inTable = false;
+  for (const item of data) {
+    if (item.section) {
+      if (inTable) html += '</tbody></table>';
+      html += `<div class="ref-section-title">${escHtml(item.section)}</div>`;
+      html += '<table class="ref-table"><tbody>';
+      inTable = true;
+      continue;
+    }
+    if (Array.isArray(item)) {
+      html += `<tr><td>${escHtml(item[0])}</td><td>${escHtml(item[1])}</td></tr>`;
+    }
+  }
+  if (inTable) html += '</tbody></table>';
+  return html;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
+const state = {
+  pattern: '',
+  flags: new Set(['g', 'm']),
+  debounceTimer: null,
+  matches: [],
+  currentMatchIdx: 0,
+};
+
+// ─── DOM refs ─────────────────────────────────────────────────────────────────
+
+const textInput       = document.getElementById('text-input');
+const patternInput    = document.getElementById('pattern-input');
+const flagsInput       = document.getElementById('flags-input');
+const errorMsg         = document.getElementById('error-msg');
+const matchCount       = document.getElementById('match-count');
+const flagButtons      = document.getElementById('flag-buttons');
+const modalBackdrop    = document.getElementById('modal-backdrop');
+const tabBar           = document.getElementById('tab-bar');
+const inspectorSection = document.getElementById('inspector-section');
+const inspectorBody    = document.getElementById('inspector-body');
+const stepLabel        = document.getElementById('step-label');
+const textMirror       = document.getElementById('text-mirror');
+
+// ─── Init reference tables ────────────────────────────────────────────────────
+
+for (const [lang, data] of Object.entries(REF)) {
+  document.getElementById(`tab-${lang}`).innerHTML = buildRefTable(data);
+}
+
+// ─── URL Hash permalink ───────────────────────────────────────────────────────
+
+function updateHash() {
+  const p = state.pattern;
+  const f = [...state.flags].join('');
+  if (p || f !== 'g') {
+    const params = new URLSearchParams();
+    if (p) params.set('p', p);
+    params.set('f', f);
+    history.replaceState(null, '', '#' + params.toString());
+  } else {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+}
+
+function loadFromHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  const p = params.get('p');
+  const f = params.get('f');
+  if (p !== null) {
+    patternInput.value = p;
+    state.pattern = p;
+  }
+  if (f !== null) {
+    const valid = f.split('').filter(c => /[gimsud]/.test(c));
+    state.flags = new Set(valid);
+    flagsInput.value = valid.join('');
+    document.querySelectorAll('.flag-btn').forEach(btn => {
+      btn.classList.toggle('active', state.flags.has(btn.dataset.flag));
+    });
+  }
+}
+
+// ─── Scroll sync ─────────────────────────────────────────────────────────────
+
+// Keep mirror scrolled to match the textarea at all times
+textInput.addEventListener('scroll', () => {
+  textMirror.scrollTop  = textInput.scrollTop;
+  textMirror.scrollLeft = textInput.scrollLeft;
+});
+
+// ─── Inspector ────────────────────────────────────────────────────────────────
+
+function updateInspector() {
+  if (!state.matches.length) {
+    inspectorSection.classList.remove('visible');
+    return;
+  }
+
+  inspectorSection.classList.add('visible');
+  const total = state.matches.length;
+  const idx = state.currentMatchIdx;
+  const m = state.matches[idx];
+
+  stepLabel.textContent = `${idx + 1} / ${total}`;
+
+  let html = `<div class="insp-row"><span class="insp-label">Position</span><span class="insp-value">${m.index}&#8211;${m.index + m[0].length}</span></div>`;
+  html += `<div class="insp-row"><span class="insp-label">Full match</span><span class="insp-value insp-match">${escHtml(m[0]) || '<em style="color:var(--text-dim)">empty string</em>'}</span></div>`;
+
+  for (let g = 1; g < m.length; g++) {
+    const val = m[g] === undefined
+      ? '<span class="insp-undef">undefined</span>'
+      : `<span class="insp-value">${escHtml(m[g])}</span>`;
+    html += `<div class="insp-row"><span class="insp-label">Group ${g}</span>${val}</div>`;
+  }
+
+  if (m.groups) {
+    for (const [name, val] of Object.entries(m.groups)) {
+      const v = val === undefined
+        ? '<span class="insp-undef">undefined</span>'
+        : `<span class="insp-value">${escHtml(val)}</span>`;
+      html += `<div class="insp-row"><span class="insp-label">${escHtml(name)}</span>${v}</div>`;
+    }
+  }
+
+  inspectorBody.innerHTML = html;
+}
+
+function setMirror(text, matches) {
+  let html = '';
+  let lastIdx = 0;
+  matches.forEach((m, i) => {
+    const start = m.index;
+    const end = start + m[0].length;
+    if (start > lastIdx) html += escHtml(text.slice(lastIdx, start));
+    const cls = i === state.currentMatchIdx ? ' class="current"' : '';
+    html += `<mark${cls}>${escHtml(m[0])}</mark>`;
+    lastIdx = end;
+  });
+  if (lastIdx < text.length) html += escHtml(text.slice(lastIdx));
+  // div needs <br> for newlines; add trailing sentinel so last blank line has height
+  html = html.replace(/\n/g, '<br>');
+  textMirror.innerHTML = html;
+}
+
+function highlightCurrentMark() {
+  textMirror.querySelectorAll('mark').forEach((el, i) => {
+    el.classList.toggle('current', i === state.currentMatchIdx);
+  });
+  const cur = textMirror.querySelector('mark.current');
+  if (cur) {
+    cur.scrollIntoView({ block: 'nearest' });
+    textInput.scrollTop  = textMirror.scrollTop;
+    textInput.scrollLeft = textMirror.scrollLeft;
+  }
+}
+
+// ─── Highlighting ─────────────────────────────────────────────────────────────
+
+function applyHighlights() {
+  // Normalize all line-ending variants; paste handler covers most cases but
+  // drag-and-drop bypasses it, so normalize here too as a backstop.
+  const text = textInput.value.replace(/\r\n/g, '\n').replace(/[\r\u2028\u2029]/g, '\n');
+  const pattern = state.pattern;
+
+  if (!pattern) {
+    textMirror.innerHTML = escHtml(text).replace(/\n/g, '<br>');
+    matchCount.textContent = '';
+    errorMsg.textContent = '';
+    state.matches = [];
+    state.currentMatchIdx = 0;
+    updateInspector();
+    return;
+  }
+
+  let regex;
+  try {
+    const flagStr = [...state.flags].join('');
+    const effectiveFlags = state.flags.has('g') ? flagStr : flagStr + 'g';
+    regex = new RegExp(pattern, effectiveFlags);
+    errorMsg.textContent = '';
+  } catch (e) {
+    errorMsg.textContent = e.message;
+    matchCount.textContent = '';
+    textMirror.innerHTML = escHtml(text).replace(/\n/g, '<br>');
+    state.matches = [];
+    state.currentMatchIdx = 0;
+    updateInspector();
+    return;
+  }
+
+  const matches = [...text.matchAll(regex)];
+  state.matches = matches;
+  state.currentMatchIdx = Math.min(state.currentMatchIdx, Math.max(0, matches.length - 1));
+
+  matchCount.textContent = matches.length
+    ? `${matches.length} match${matches.length === 1 ? '' : 'es'}`
+    : 'no matches';
+
+  setMirror(text, matches);
+  updateInspector();
+}
+
+function scheduleHighlight() {
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(applyHighlights, 150);
+}
+
+// ─── Escape variants ──────────────────────────────────────────────────────────
+
+function computeEscapeVariants(pattern, flags) {
+  const f = [...flags].join('');
+  const jsonInner = JSON.stringify(pattern).slice(1, -1);
+
+  const trailingBs = (pattern.match(/\\+$/) || [''])[0].length;
+  const oddTrailing = trailingBs % 2 !== 0;
+
+  let pythonVariant;
+  if (!oddTrailing && !pattern.includes('"')) {
+    pythonVariant = { lang: 'Python raw string', code: `r"${pattern}"` };
+  } else if (!oddTrailing && !pattern.includes("'")) {
+    pythonVariant = { lang: 'Python raw string', code: `r'${pattern}'` };
+  } else {
+    pythonVariant = { lang: 'Python string (escaped)', code: `"${jsonInner}"` };
+  }
+
+  let goVariant;
+  if (!pattern.includes('`')) {
+    goVariant = { lang: 'Go raw string (backtick)', code: '`' + pattern + '`' };
+  } else {
+    goVariant = { lang: 'Go string (backtick unavailable)', code: `"${jsonInner}"` };
+  }
+
+  const jsPattern = pattern.replace(/\//g, '\\/');
+
+  return [
+    { lang: 'JSON string', code: `"${jsonInner}"` },
+    pythonVariant,
+    goVariant,
+    { lang: 'Java string', code: `"${jsonInner}"` },
+    { lang: 'JS RegExp literal', code: `/${jsPattern}/${f}` },
+  ];
+}
+
+function renderEscapeModal() {
+  const raw = patternInput.value;
+  const variants = computeEscapeVariants(raw, state.flags);
+  const container = document.getElementById('escape-variants-container');
+
+  container.innerHTML = variants.map((v, i) => `
+    <div class="escape-variant">
+      <div class="escape-label">${escHtml(v.lang)}</div>
+      <div class="escape-row">
+        <div class="modal-code" id="esc-code-${i}">${escHtml(v.code) || '<em style="color:var(--text-dim)">empty pattern</em>'}</div>
+        <button class="btn" data-copy-idx="${i}">Copy</button>
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-copy-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.copyIdx, 10);
+      const text = variants[idx].code;
+      const copyToClipboard = (s) => {
+        navigator.clipboard.writeText(s).catch(() => {
+          const ta = document.createElement('textarea');
+          ta.value = s;
+          Object.assign(ta.style, { position: 'fixed', opacity: '0' });
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        });
+      };
+      copyToClipboard(text);
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    });
+  });
+
+  modalBackdrop.classList.add('open');
+}
+
+// ─── Event listeners ──────────────────────────────────────────────────────────
+
+// Intercept paste to normalize all line-ending variants (\r\n, \r, U+2028, U+2029)
+// before they land in the textarea. textarea.value normalizes \r\n → \n per spec,
+// but Unicode line/paragraph separators (U+2028, U+2029) are not touched by browsers
+// and cause .* to stop mid-"line" without creating a visible break in the mirror.
+textInput.addEventListener('paste', (e) => {
+  const plain = e.clipboardData.getData('text/plain');
+  e.preventDefault();
+  const normalized = plain.replace(/\r\n/g, '\n').replace(/[\r\u2028\u2029]/g, '\n');
+  const s = textInput.selectionStart;
+  const end = textInput.selectionEnd;
+  textInput.value = textInput.value.slice(0, s) + normalized + textInput.value.slice(end);
+  textInput.selectionStart = textInput.selectionEnd = s + normalized.length;
+  applyHighlights();
+});
+
+// Text changes run immediately — textarea text is transparent so any debounce
+// creates visible lag. Regex on typical text is fast enough to run synchronously.
+textInput.addEventListener('input', applyHighlights);
+
+patternInput.addEventListener('input', () => {
+  state.pattern = patternInput.value;
+  state.currentMatchIdx = 0;
+  updateHash();
+  scheduleHighlight();
+});
+
+flagsInput.addEventListener('input', () => {
+  const val = flagsInput.value.replace(/[^gimsud]/g, '');
+  flagsInput.value = val;
+  state.flags = new Set(val.split('').filter(Boolean));
+  document.querySelectorAll('.flag-btn').forEach(btn => {
+    btn.classList.toggle('active', state.flags.has(btn.dataset.flag));
+  });
+  state.currentMatchIdx = 0;
+  updateHash();
+  scheduleHighlight();
+});
+
+flagButtons.addEventListener('click', (e) => {
+  const btn = e.target.closest('.flag-btn');
+  if (!btn) return;
+  const f = btn.dataset.flag;
+  if (state.flags.has(f)) state.flags.delete(f);
+  else state.flags.add(f);
+  btn.classList.toggle('active', state.flags.has(f));
+  flagsInput.value = [...state.flags].join('');
+  state.currentMatchIdx = 0;
+  updateHash();
+  scheduleHighlight();
+});
+
+tabBar.addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  const tab = btn.dataset.tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
+});
+
+document.getElementById('btn-prev').addEventListener('click', () => {
+  if (!state.matches.length) return;
+  state.currentMatchIdx = (state.currentMatchIdx - 1 + state.matches.length) % state.matches.length;
+  highlightCurrentMark();
+  updateInspector();
+});
+
+document.getElementById('btn-next').addEventListener('click', () => {
+  if (!state.matches.length) return;
+  state.currentMatchIdx = (state.currentMatchIdx + 1) % state.matches.length;
+  highlightCurrentMark();
+  updateInspector();
+});
+
+document.getElementById('btn-copy-regex').addEventListener('click', () => {
+  const pattern = patternInput.value;
+  const flags = [...state.flags].join('');
+  const text = `/${pattern}/${flags}`;
+  const btn = document.getElementById('btn-copy-regex');
+  const restore = () => { btn.textContent = 'Copy'; };
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(restore, 1500);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    Object.assign(ta.style, { position: 'fixed', opacity: '0' });
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'Copied!';
+    setTimeout(restore, 1500);
+  });
+});
+
+document.getElementById('btn-escape').addEventListener('click', renderEscapeModal);
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  textInput.value = '';
+  matchCount.textContent = '';
+  state.matches = [];
+  state.currentMatchIdx = 0;
+  updateInspector();
+  applyHighlights();
+});
+
+document.getElementById('btn-modal-close').addEventListener('click', () => {
+  modalBackdrop.classList.remove('open');
+});
+
+modalBackdrop.addEventListener('click', (e) => {
+  if (e.target === modalBackdrop) modalBackdrop.classList.remove('open');
+});
+
+document.getElementById('btn-share').addEventListener('click', () => {
+  updateHash();
+  const url = location.href;
+  const btn = document.getElementById('btn-share');
+  const copyUrl = () => {
+    navigator.clipboard.writeText(url).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      Object.assign(ta.style, { position: 'fixed', opacity: '0' });
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    });
+  };
+  copyUrl();
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = 'Share'; }, 1500);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') modalBackdrop.classList.remove('open');
+});
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+loadFromHash();
+// Sync the flags text input to whatever state.flags holds after hash load
+flagsInput.value = [...state.flags].join('');
+document.querySelectorAll('.flag-btn').forEach(btn => {
+  btn.classList.toggle('active', state.flags.has(btn.dataset.flag));
+});
+applyHighlights();
+</script>
+</body>
+</html>

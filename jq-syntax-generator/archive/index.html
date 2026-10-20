@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JQ Syntax Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 1.3rem;
+      color: #569cd6;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      color: #808080;
+      font-size: 0.8rem;
+      margin-bottom: 16px;
+    }
+    #input-section {
+      margin-bottom: 14px;
+    }
+    #json-input {
+      width: 100%;
+      height: 130px;
+      background: #2d2d2d;
+      color: #d4d4d4;
+      border: 1px solid #404040;
+      border-radius: 4px;
+      padding: 8px;
+      font-family: inherit;
+      font-size: 0.82rem;
+      resize: vertical;
+      outline: none;
+    }
+    #json-input:focus { border-color: #569cd6; }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      align-items: center;
+    }
+    button {
+      padding: 5px 14px;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+    }
+    #parse-btn { background: #0e639c; color: #fff; }
+    #parse-btn:hover { background: #1177bb; }
+    #sample-btn { background: #3c3c3c; color: #d4d4d4; }
+    #sample-btn:hover { background: #4c4c4c; }
+    #parse-error {
+      margin-top: 6px;
+      color: #f48771;
+      font-size: 0.8rem;
+      min-height: 1em;
+    }
+    #main-area {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    #tree-panel { flex: 1; min-width: 0; }
+    #result-panel { width: 300px; flex-shrink: 0; }
+    #tree-container {
+      background: #252526;
+      border: 1px solid #404040;
+      border-radius: 4px;
+      padding: 10px 12px;
+      min-height: 120px;
+      overflow: auto;
+      max-height: 68vh;
+    }
+    #tree-placeholder {
+      color: #606060;
+      font-size: 0.82rem;
+      font-style: italic;
+    }
+    ul { list-style: none; padding-left: 16px; }
+    ul.tree-root { padding-left: 0; }
+    li { line-height: 1.0; }
+    .node-row {
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+      padding: 2px 3px;
+      border-radius: 3px;
+      cursor: default;
+    }
+    .node-row.selected { background: #094771; }
+    .toggle {
+      cursor: pointer;
+      color: #606060;
+      user-select: none;
+      font-size: 0.65rem;
+      width: 10px;
+      flex-shrink: 0;
+      display: inline-block;
+      text-align: center;
+    }
+    .node-label {
+      cursor: pointer;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+    .node-label:hover { color: #9cdcfe; }
+    .k { color: #9cdcfe; }
+    .colon { color: #808080; margin: 0 2px; }
+    .sv { color: #ce9178; }
+    .nv { color: #b5cea8; }
+    .bv { color: #569cd6; }
+    .th { color: #606060; font-size: 0.75rem; }
+
+    /* Result panel */
+    .result-card {
+      background: #252526;
+      border: 1px solid #404040;
+      border-radius: 4px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .card-label {
+      display: block;
+      color: #808080;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    #path-row { display: flex; gap: 6px; }
+    #path-output {
+      flex: 1;
+      background: #1e1e1e;
+      color: #4ec9b0;
+      border: 1px solid #404040;
+      border-radius: 3px;
+      padding: 4px 7px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    #copy-btn { background: #3c3c3c; color: #d4d4d4; padding: 4px 10px; }
+    #copy-btn:hover { background: #4c4c4c; }
+    #copy-status {
+      font-size: 0.72rem;
+      color: #4ec9b0;
+      min-height: 1.1em;
+      margin-top: 4px;
+    }
+    #test-status {
+      font-size: 0.78rem;
+      margin-bottom: 5px;
+      min-height: 1em;
+    }
+    #test-status.pass { color: #4ec9b0; }
+    #test-status.fail { color: #f48771; }
+    #resolved-value {
+      background: #1e1e1e;
+      border: 1px solid #404040;
+      border-radius: 3px;
+      padding: 7px;
+      font-size: 0.75rem;
+      overflow: auto;
+      max-height: 180px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #d4d4d4;
+      min-height: 2em;
+    }
+    /* Filter card */
+    .filter-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+    #filter-op {
+      width: 100%;
+      background: #2d2d2d;
+      color: #d4d4d4;
+      border: 1px solid #404040;
+      border-radius: 3px;
+      padding: 4px 7px;
+      font-family: inherit;
+      font-size: 0.82rem;
+      cursor: pointer;
+      outline: none;
+    }
+    #filter-op:focus { border-color: #569cd6; }
+    #filter-value, #filter-flags {
+      background: #2d2d2d;
+      color: #d4d4d4;
+      border: 1px solid #404040;
+      border-radius: 3px;
+      padding: 4px 7px;
+      font-family: inherit;
+      font-size: 0.82rem;
+      outline: none;
+    }
+    #filter-value { flex: 1; min-width: 0; }
+    #filter-value:focus, #filter-flags:focus { border-color: #569cd6; }
+    #filter-flags { width: 60px; flex-shrink: 0; }
+    #filter-output {
+      flex: 1;
+      min-width: 0;
+      background: #1e1e1e;
+      color: #4ec9b0;
+      border: 1px solid #404040;
+      border-radius: 3px;
+      padding: 4px 7px;
+      font-family: inherit;
+      font-size: 0.82rem;
+      outline: none;
+    }
+    #filter-expr-row { display: flex; gap: 6px; }
+    #filter-copy-status { font-size: 0.72rem; color: #4ec9b0; min-height: 1.1em; margin-top: 4px; }
+    #filter-hint { font-size: 0.7rem; color: #606060; margin-top: 3px; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1>JQ Syntax Generator</h1>
+  <p class="subtitle">Paste JSON, click any node, get the jq path.</p>
+
+  <div id="input-section">
+    <textarea id="json-input" placeholder='Paste JSON here, e.g. {"name":"Alice","scores":[10,20]}'></textarea>
+    <div class="btn-row">
+      <button id="parse-btn">Parse JSON</button>
+      <button id="sample-btn">Load sample</button>
+    </div>
+    <div id="parse-error"></div>
+  </div>
+
+  <div id="main-area">
+    <div id="tree-panel">
+      <div id="tree-container">
+        <span id="tree-placeholder">Paste JSON above and click Parse.</span>
+      </div>
+    </div>
+    <div id="result-panel">
+      <div class="result-card">
+        <span class="card-label">JQ Path</span>
+        <div id="path-row">
+          <input type="text" id="path-output" readonly placeholder="click a node…" />
+          <button id="copy-btn">Copy</button>
+        </div>
+        <div id="copy-status"></div>
+      </div>
+      <div class="result-card">
+        <span class="card-label">Path test — resolved value</span>
+        <div id="test-status"></div>
+        <pre id="resolved-value"></pre>
+      </div>
+      <div class="result-card">
+        <span class="card-label">Value Filter</span>
+        <div class="filter-row">
+          <select id="filter-op">
+            <option value="eq">== equals</option>
+            <option value="neq">!= not equals</option>
+            <option value="gt">&gt; greater than</option>
+            <option value="lt">&lt; less than</option>
+            <option value="gte">&gt;= gte</option>
+            <option value="lte">&lt;= lte</option>
+            <option value="contains">| contains</option>
+            <option value="startswith">| startswith</option>
+            <option value="endswith">| endswith</option>
+            <option value="test">| test (regex)</option>
+            <option value="null">== null</option>
+            <option value="notnull">!= null</option>
+          </select>
+        </div>
+        <div class="filter-row" id="filter-value-row">
+          <input type="text" id="filter-value" placeholder="value or pattern…" />
+          <input type="text" id="filter-flags" placeholder="flags"
+            title="Regex flags: i=case-insensitive, x=extended, s=dot-all, m=multiline"
+            style="display:none" />
+        </div>
+        <div id="filter-expr-row">
+          <input type="text" id="filter-output" readonly placeholder="select a node first…" />
+          <button id="filter-copy-btn">Copy</button>
+        </div>
+        <div id="filter-copy-status"></div>
+        <div id="filter-hint"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    let currentJson = null;
+    let selectedRow = null;
+    let currentPath = null;
+
+    // ── path builders ──────────────────────────────────────────────────
+
+    function isSimpleKey(key) {
+      return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key);
+    }
+
+    function buildChildPath(parentPath, key, isIndex) {
+      const prefix = parentPath === '.' ? '' : parentPath;
+      if (isIndex) {
+        return prefix + '.[' + key + ']';
+      }
+      if (isSimpleKey(String(key))) {
+        return prefix + '.' + key;
+      }
+      const escaped = String(key).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      return prefix + '.["' + escaped + '"]';
+    }
+
+    // ── path evaluator ─────────────────────────────────────────────────
+
+    function tokenizePath(jqPath) {
+      const tokens = [];
+      let i = 1; // skip leading '.'
+      while (i < jqPath.length) {
+        if (jqPath[i] === '.') { i++; continue; }
+        if (jqPath[i] === '[') {
+          const closeIdx = jqPath.indexOf(']', i);
+          if (closeIdx === -1) throw new Error('Malformed path: unclosed [');
+          const inner = jqPath.slice(i + 1, closeIdx);
+          i = closeIdx + 1;
+          if (inner.startsWith('"') && inner.endsWith('"')) {
+            const key = inner.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            tokens.push({ type: 'key', value: key });
+          } else {
+            const idx = parseInt(inner, 10);
+            if (isNaN(idx)) throw new Error('Malformed path: invalid index "' + inner + '"');
+            tokens.push({ type: 'index', value: idx });
+          }
+        } else {
+          let j = i;
+          while (j < jqPath.length && jqPath[j] !== '.' && jqPath[j] !== '[') j++;
+          if (j === i) { i++; continue; }
+          tokens.push({ type: 'key', value: jqPath.slice(i, j) });
+          i = j;
+        }
+      }
+      return tokens;
+    }
+
+    function evaluatePath(json, jqPath) {
+      if (jqPath === '.') return { ok: true, value: json };
+      let tokens;
+      try { tokens = tokenizePath(jqPath); }
+      catch (e) { return { ok: false, error: e.message }; }
+
+      let current = json;
+      for (const token of tokens) {
+        if (token.type === 'key') {
+          if (current === null || typeof current !== 'object' || Array.isArray(current)) {
+            return { ok: false, error: 'Expected object for key "' + token.value + '"' };
+          }
+          if (!(token.value in current)) {
+            return { ok: false, error: 'Key not found: "' + token.value + '"' };
+          }
+          current = current[token.value];
+        } else {
+          if (!Array.isArray(current)) {
+            return { ok: false, error: 'Expected array at index ' + token.value };
+          }
+          if (token.value < 0 || token.value >= current.length) {
+            return { ok: false, error: 'Index out of bounds: ' + token.value };
+          }
+          current = current[token.value];
+        }
+      }
+      return { ok: true, value: current };
+    }
+
+    // ── value filter builder ───────────────────────────────────────────
+
+    function jqLiteral(raw) {
+      const t = raw.trim();
+      if (t === 'null') return 'null';
+      if (t === 'true') return 'true';
+      if (t === 'false') return 'false';
+      if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(t)) return t;
+      return '"' + raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+    }
+
+    function jqStr(raw) {
+      return '"' + raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+    }
+
+    function buildFilterExpression(path, op, rawValue, flags) {
+      const needsValue = op !== 'null' && op !== 'notnull';
+      if (needsValue && !rawValue.trim()) return '';
+      switch (op) {
+        case 'eq':         return 'select(' + path + ' == ' + jqLiteral(rawValue) + ')';
+        case 'neq':        return 'select(' + path + ' != ' + jqLiteral(rawValue) + ')';
+        case 'gt':         return 'select(' + path + ' > '  + jqLiteral(rawValue) + ')';
+        case 'lt':         return 'select(' + path + ' < '  + jqLiteral(rawValue) + ')';
+        case 'gte':        return 'select(' + path + ' >= ' + jqLiteral(rawValue) + ')';
+        case 'lte':        return 'select(' + path + ' <= ' + jqLiteral(rawValue) + ')';
+        case 'contains':   return 'select(' + path + ' | contains(' + jqStr(rawValue) + '))';
+        case 'startswith': return 'select(' + path + ' | startswith(' + jqStr(rawValue) + '))';
+        case 'endswith':   return 'select(' + path + ' | endswith(' + jqStr(rawValue) + '))';
+        case 'test': {
+          const f = flags && flags.trim();
+          return f
+            ? 'select(' + path + ' | test(' + jqStr(rawValue) + '; ' + jqStr(f) + '))'
+            : 'select(' + path + ' | test(' + jqStr(rawValue) + '))';
+        }
+        case 'null':    return 'select(' + path + ' == null)';
+        case 'notnull': return 'select(' + path + ' != null)';
+        default:        return '';
+      }
+    }
+
+    function updateFilterControls() {
+      const op = document.getElementById('filter-op').value;
+      const needsValue = op !== 'null' && op !== 'notnull';
+      document.getElementById('filter-value-row').style.display = needsValue ? '' : 'none';
+      document.getElementById('filter-flags').style.display = op === 'test' ? '' : 'none';
+    }
+
+    function updateFilterExpression() {
+      const outputEl = document.getElementById('filter-output');
+      if (!currentPath) {
+        outputEl.value = '';
+        outputEl.placeholder = 'select a node first…';
+        document.getElementById('filter-hint').textContent = '';
+        return;
+      }
+      const op = document.getElementById('filter-op').value;
+      const rawValue = document.getElementById('filter-value').value;
+      const flags = document.getElementById('filter-flags').value;
+      const expr = buildFilterExpression(currentPath, op, rawValue, flags);
+      outputEl.value = expr;
+      outputEl.placeholder = 'enter a value…';
+      document.getElementById('filter-copy-status').textContent = '';
+      const hintEl = document.getElementById('filter-hint');
+      if (op === 'test') {
+        hintEl.textContent = 'ONIG regex — flags: i=case-insensitive, x=extended, s=dot-all, m=multiline';
+      } else if (op === 'null' || op === 'notnull') {
+        hintEl.textContent = '';
+      } else if (op === 'contains' || op === 'startswith' || op === 'endswith') {
+        hintEl.textContent = 'Literal string match (no wildcards).';
+      } else {
+        hintEl.textContent = 'Numbers/booleans/null auto-detected; anything else is a string.';
+      }
+    }
+
+    // ── tree rendering ─────────────────────────────────────────────────
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function formatLeafValue(val) {
+      if (val === null) return '<span class="bv">null</span>';
+      if (typeof val === 'boolean') return '<span class="bv">' + val + '</span>';
+      if (typeof val === 'number') return '<span class="nv">' + val + '</span>';
+      if (typeof val === 'string') {
+        const display = val.length > 60 ? val.slice(0, 60) + '…' : val;
+        return '<span class="sv">"' + escapeHtml(display) + '"</span>';
+      }
+      return escapeHtml(String(val));
+    }
+
+    function renderNode(value, jqPath, keyLabel) {
+      const li = document.createElement('li');
+
+      const isLeaf = value === null || typeof value !== 'object';
+      const isArray = !isLeaf && Array.isArray(value);
+      const isObj = !isLeaf && !isArray;
+      const childCount = isLeaf ? 0 : (isArray ? value.length : Object.keys(value).length);
+
+      const row = document.createElement('div');
+      row.className = 'node-row';
+      row.dataset.path = jqPath;
+
+      // toggle arrow (only for branches)
+      const toggle = document.createElement('span');
+      toggle.className = 'toggle';
+      if (!isLeaf) toggle.textContent = '▼';
+      row.appendChild(toggle);
+
+      // clickable label
+      const label = document.createElement('span');
+      label.className = 'node-label';
+
+      let html = '';
+      if (keyLabel !== null) {
+        html += '<span class="k">' + escapeHtml(String(keyLabel)) + '</span>';
+        html += '<span class="colon">:</span>';
+      }
+      if (isLeaf) {
+        html += formatLeafValue(value);
+      } else if (isArray) {
+        html += '<span class="th">[ ' + childCount + ' item' + (childCount !== 1 ? 's' : '') + ' ]</span>';
+      } else {
+        html += '<span class="th">{ ' + childCount + ' key' + (childCount !== 1 ? 's' : '') + ' }</span>';
+      }
+      label.innerHTML = html;
+      row.appendChild(label);
+      li.appendChild(row);
+
+      // children
+      let childUl = null;
+      if (!isLeaf) {
+        childUl = document.createElement('ul');
+        if (isArray) {
+          value.forEach((item, idx) => {
+            childUl.appendChild(renderNode(item, buildChildPath(jqPath, idx, true), idx));
+          });
+        } else {
+          Object.keys(value).forEach(key => {
+            childUl.appendChild(renderNode(value[key], buildChildPath(jqPath, key, false), key));
+          });
+        }
+        li.appendChild(childUl);
+
+        toggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const collapsed = childUl.style.display === 'none';
+          childUl.style.display = collapsed ? '' : 'none';
+          toggle.textContent = collapsed ? '▼' : '▶';
+        });
+      }
+
+      label.addEventListener('click', () => {
+        if (selectedRow) selectedRow.classList.remove('selected');
+        selectedRow = row;
+        row.classList.add('selected');
+        selectPath(jqPath);
+      });
+
+      return li;
+    }
+
+    function renderTree(json) {
+      const container = document.getElementById('tree-container');
+      container.innerHTML = '';
+
+      const ul = document.createElement('ul');
+      ul.className = 'tree-root';
+
+      // root node: path ".", no key label
+      const rootLi = renderNode(json, '.', null);
+
+      // inject a "(root)" key label into the root row
+      const rootLabel = rootLi.querySelector('.node-label');
+      const isArr = Array.isArray(json);
+      const count = isArr ? json.length : Object.keys(json).length;
+      rootLabel.innerHTML =
+        '<span class="k">(root)</span><span class="colon">:</span>' +
+        '<span class="th">' + (isArr ? '[' : '{') + ' ' + count + ' ' +
+        (isArr ? 'items' : 'keys') + ' ' + (isArr ? ']' : '}') + '</span>';
+
+      ul.appendChild(rootLi);
+      container.appendChild(ul);
+    }
+
+    // ── path selection + test ──────────────────────────────────────────
+
+    function selectPath(jqPath) {
+      currentPath = jqPath;
+      document.getElementById('path-output').value = jqPath;
+      document.getElementById('copy-status').textContent = '';
+
+      const result = evaluatePath(currentJson, jqPath);
+      const statusEl = document.getElementById('test-status');
+      const resolvedEl = document.getElementById('resolved-value');
+
+      if (result.ok) {
+        statusEl.className = 'pass';
+        statusEl.textContent = '✓ Resolves successfully';
+        const val = result.value;
+        resolvedEl.textContent = (val === null || typeof val !== 'object')
+          ? JSON.stringify(val)
+          : JSON.stringify(val, null, 2);
+      } else {
+        statusEl.className = 'fail';
+        statusEl.textContent = '✗ ' + result.error;
+        resolvedEl.textContent = '';
+      }
+      updateFilterExpression();
+    }
+
+    // ── event listeners ────────────────────────────────────────────────
+
+    document.getElementById('parse-btn').addEventListener('click', () => {
+      const raw = document.getElementById('json-input').value.trim();
+      const errorEl = document.getElementById('parse-error');
+
+      if (!raw) {
+        errorEl.textContent = 'Please paste some JSON first.';
+        return;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        errorEl.textContent = 'JSON parse error: ' + e.message;
+        return;
+      }
+
+      if (parsed === null || typeof parsed !== 'object') {
+        errorEl.textContent = 'Root value must be an object or array, not a primitive.';
+        return;
+      }
+
+      errorEl.textContent = '';
+      currentJson = parsed;
+      selectedRow = null;
+      currentPath = null;
+      document.getElementById('path-output').value = '';
+      document.getElementById('copy-status').textContent = '';
+      document.getElementById('test-status').textContent = '';
+      document.getElementById('resolved-value').textContent = '';
+      document.getElementById('filter-output').value = '';
+      document.getElementById('filter-output').placeholder = 'select a node first…';
+      document.getElementById('filter-value').value = '';
+      document.getElementById('filter-copy-status').textContent = '';
+      document.getElementById('filter-hint').textContent = '';
+      renderTree(currentJson);
+    });
+
+    document.getElementById('copy-btn').addEventListener('click', () => {
+      const path = document.getElementById('path-output').value;
+      if (!path) return;
+      const statusEl = document.getElementById('copy-status');
+      const showCopied = () => {
+        statusEl.textContent = 'Copied!';
+        setTimeout(() => { statusEl.textContent = ''; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(path).then(showCopied).catch(() => {
+          document.getElementById('path-output').select();
+          document.execCommand('copy');
+          showCopied();
+        });
+      } else {
+        document.getElementById('path-output').select();
+        document.execCommand('copy');
+        showCopied();
+      }
+    });
+
+    document.getElementById('filter-op').addEventListener('change', () => {
+      updateFilterControls();
+      updateFilterExpression();
+    });
+
+    document.getElementById('filter-value').addEventListener('input', updateFilterExpression);
+    document.getElementById('filter-flags').addEventListener('input', updateFilterExpression);
+
+    document.getElementById('filter-copy-btn').addEventListener('click', () => {
+      const expr = document.getElementById('filter-output').value;
+      if (!expr) return;
+      const statusEl = document.getElementById('filter-copy-status');
+      const showCopied = () => {
+        statusEl.textContent = 'Copied!';
+        setTimeout(() => { statusEl.textContent = ''; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(expr).then(showCopied).catch(() => {
+          document.getElementById('filter-output').select();
+          document.execCommand('copy');
+          showCopied();
+        });
+      } else {
+        document.getElementById('filter-output').select();
+        document.execCommand('copy');
+        showCopied();
+      }
+    });
+
+    document.getElementById('sample-btn').addEventListener('click', () => {
+      document.getElementById('json-input').value = JSON.stringify({
+        "user": {
+          "id": 42,
+          "name": "Alice",
+          "active": true,
+          "score": 9.5,
+          "tags": ["admin", "editor"],
+          "address": {
+            "city": "Portland",
+            "zip": "97201"
+          },
+          "key with spaces": "bracket notation demo"
+        },
+        "results": [
+          { "rank": 1, "value": 100 },
+          { "rank": 2, "value": 80 }
+        ]
+      }, null, 2);
+      document.getElementById('parse-error').textContent = '';
+    });
+  </script>
+</body>
+</html>
