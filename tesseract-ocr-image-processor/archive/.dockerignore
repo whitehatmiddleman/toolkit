@@ -1,6 +1,0 @@
-.built
-build.log
-BUILD_FAILED.md
-*.log
-.git
-node_modules
